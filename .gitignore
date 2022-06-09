@@ -1,1 +1,8 @@
 .gradle
+*~
+*.swp
+build
+data/human
+.DS_Store
+*/.DS_Store
+src/Users:.fileloc
