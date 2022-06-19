@@ -1,11 +1,26 @@
 apply plugin: "java"
 
-String mainClass = "mapper.Main"
+// get git version
+def describeOutput = new ByteArrayOutputStream()
+project.exec({
+  commandLine(["git", "describe", "HEAD", "--tags"])
+  standardOutput = describeOutput
+})
+def gitCommit = describeOutput.toString().replace("\n", "")
+def suffixOutput = new ByteArrayOutputStream()
+project.exec({
+  commandLine(["bash", "-c", "git status --porcelain | head -n 1 | sed 's/..*/-dev/'"])
+  standardOutput = suffixOutput
+})
+def modificationSuffix = suffixOutput.toString().trim().replace("\n", "")
+def gitVersion = gitCommit + modificationSuffix
 
 compileJava {
   sourceCompatibility = 1.7
   targetCompatibility = 1.7
 }
+
+String mainClass = "mapper.Main"
 
 jar {
   manifest {
@@ -17,6 +32,21 @@ dependencies {
   test {
     testImplementation "junit:junit:4.13"
   }
+}
+
+task release(type: Copy) {
+  from "build/libs"
+  include "mapper.jar"
+  into "build/libs"
+  rename("mapper.jar", "mapper-${gitVersion}.jar")
+  dependsOn("build")
+}
+
+def expandProperties = new HashMap<String, String>()
+expandProperties["mapperVersion"] = gitVersion
+project.tasks["processResources"].configure { processTask ->
+  processTask.expand(expandProperties)
+  processTask.inputs.property("properties", expandProperties)
 }
 
 repositories {
