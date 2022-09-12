@@ -70,3 +70,6 @@ Usage:
     --verbosity-auto set verbosity flags dynamically and automatically based on the data and alignment
 
     --num-threads <count> number of threads to use at once for processing. Higher values will run more quickly on a system that has that many CPUs available.
+
+
+## If you're working on a bioinformatics project and would be interested in some consulting help check out our website at https://omicode.info !
