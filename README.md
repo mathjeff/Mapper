@@ -7,22 +7,24 @@ Latest development version (which includes preliminary SAM output) can be downlo
 Contact:\
  Dr. Anni Zhang, MIT, anniz44@mit.edu
 
+
 Usage:
-
-  java -jar mapper.jar --reference <ref.fasta> --queries <queries.fastq> [--queries <queries2.fastq> ...] --out-vcf <out.vcf> [options]
-
-  java -jar mapper.jar --reference <ref.fasta> --queries <queries.fastq> [--queries <queries2.fastq> ...] --out-refs-map-count <counts.txt> [options]
-
-  java -jar mapper.jar --reference <ref.fasta> --queries <queries.fastq> [--queries <queries2.fastq> ...] --out-sam <out.sam> [options]
+  java -jar mapper.jar --out-vcf <out.vcf> --reference <ref.fasta> --queries <queries.fastq> [options]
+  java -jar mapper.jar --out-sam <out.sam> --reference <ref.fasta> --queries <queries.fastq> [options]
+  java -jar mapper.jar --out-refs-map-count <counts.txt> --reference <ref.fasta> --queries <queries.fastq> [options]
+  java -jar mapper.jar --out-unaligned <unaligned.fastq> --reference <ref.fasta> --queries <queries.fastq> [options]
 
     Aligns genomic sequences quickly
 
-  INPUT FILES:
+  INPUT:
 
     --reference <file> the reference to use. Should be in .fasta/.fa/.fna or .fastq/.fq format or a .gz of one of those formats.
 
     --queries <file> the reads to align to the reference. Should be in .fastq or .fasta format.
       May be specified multiple times for multiple query files
+
+    --split-queries-past-size <size> Any queries longer than <size> will be split into smaller queries.
+      THIS OPTION IS A TEMPORARY EXPERIMENT FOR DETECTING REARRANGEMENTS IN LONG READS.
 
   OUTPUT FORMATS:
 
@@ -40,7 +42,13 @@ Usage:
 
       --out-sam <file> the output file in SAM format
 
-    --no-output skip writing an output file if none is requested
+      --out-unaligned <file> output file containing unaligned reads. Must have a .fasta or .fastq extension
+
+    --no-output if no output is requested, skip writing output rather than throwing an error
+
+  Multiple output formats may be specified during a single run; for example:
+
+    --out-sam out.sam --out-unaligned out.fastq
 
   ALIGNMENT PARAMETERS:
 
