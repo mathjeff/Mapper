@@ -2,7 +2,7 @@ Mapper: a fast, accurate aligner for genomic sequences
 
 Latest release version can be downloaded here: https://github.com/mathjeff/Mapper/releases/download/1.0.0/mapper-1.0.0.jar
 
-Latest development version (which includes preliminary SAM output) can be downloaded here: https://github.com/mathjeff/Mapper/releases/download/1.1.0-beta03/mapper-1.1.0-beta03.jar
+Latest development version (which includes preliminary SAM output) can be downloaded here: https://github.com/mathjeff/Mapper/releases/download/1.1.0-beta04/mapper-1.1.0-beta04.jar
 
 Contact:\
  Dr. Anni Zhang, MIT, anniz44@mit.edu
@@ -26,9 +26,6 @@ Usage:
 
     --queries <file> the reads to align to the reference. Should be in .fastq or .fasta format.
       May be specified multiple times for multiple query files
-
-    --split-queries-past-size <size> Any queries longer than <size> will be split into smaller queries.
-      THIS OPTION IS A TEMPORARY EXPERIMENT FOR DETECTING REARRANGEMENTS IN LONG READS.
 
   OUTPUT FORMATS:
 
