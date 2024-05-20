@@ -7,7 +7,6 @@ Latest development version (which includes preliminary SAM output) can be downlo
 Contact:\
  Dr. Anni Zhang, MIT, anniz44@mit.edu
 
-
 Usage:
   java -jar mapper.jar [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --queries <queries.fastq> [options]
   java -jar mapper.jar [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --paired-queries [--spacing <expected> <distancePerPenalty>]<queries.fastq> <queries2.fastq> [options]
@@ -28,12 +27,18 @@ Usage:
         Any query alignment whose inner distance deviates from <expected> has an additional penalty added.
         That additional penalty equals (the difference between the actual distance and <expected>) divided by <distancePerPenalty>, unless the two query sequence alignments would overlap, in which case the additional penalty is 0.
 
-      --no-infer-ancestors
-        By default, if Mapper detects several highly similar sections of the reference genome, it will infer that they likely shared a common ancestor in the past and will lower the penalty of an alignment that mismatches the given reference but matches the inferred common ancestor.
-        This flag disables that behavior.
+    --no-infer-ancestors
+      By default, if Mapper detects several highly similar sections of the reference genome, it will infer that they likely shared a common ancestor in the past and will lower the penalty of an alignment that mismatches the given reference but matches the inferred common ancestor.
+      This flag disables that behavior.
 
     --split-queries-past-size <size> Any queries longer than <size> will be split into smaller queries.
       THIS OPTION IS A TEMPORARY EXPERIMENT FOR DETECTING REARRANGEMENTS IN LONG READS.
+
+    --no-gapmers
+      When Mapper attempts to identify locations at which the query might align to the reference, Mapper first splits the query into smaller pieces and looks for an exact match for each piece.
+      By default, these pieces contain noncontiguous basepairs and might look like XXXXXXXX____XXXX.
+      This flag makes these pieces be contiguous instead to look more like XXXXXXXXXXXX.
+      THIS OPTION IS A TEMPORARY EXPERIMENT FOR TESTING THE PERFORMANCE OF GAPMERS.
 
   OUTPUT FORMATS:
 
@@ -84,11 +89,16 @@ Usage:
 
     Computing the penalty of a match:
 
-      --new-indel-penalty <penalty> (default 2) the penalty of a new insertion or deletion of length 1
+      --snp-penalty <penalty> (default 1) the penalty of a point mutation
+
+      --ambiguity-penalty <penalty> (default --max-penalty) the penalty of a fully ambiguous position.
+        This penalty is applied in the case of an unknown basepair in the reference ('N').
+
+      --new-indel-penalty <penalty> (default 1.5) the penalty of a new insertion or deletion of length 0
 
       --extend-indel-penalty <penalty> (default 0.5) the penalty of an extension to an existing insertion or deletion
 
-      --snp-penalty <penalty> (default 1) the penalty of a point mutation
+      --additional-extend-insertion-penalty <penalty> (default <ambiguity penalty>) additional penalty of an extension to an existing insertion
 
     --max-num-matches <count> (default unlimited) the maximum number of positions on the reference that any query may match.
       Any query that appears to match more than this many positions on the reference will be reported as unmatched.
@@ -96,5 +106,5 @@ Usage:
   OTHER:
 
     --num-threads <count> number of threads to use at once for processing. Higher values will run more quickly on a system that has that many CPUs available.
-
-## If you're working on a bioinformatics project and would be interested in some consulting help check out our website at https://omicode.info !
+    
+## If you're working on a bioinformatics project and would be interested in some consulting help check out our website at https://genomiverse.net/ !
