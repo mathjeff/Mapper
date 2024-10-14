@@ -10,15 +10,15 @@ class AlignmentCache {
   public QueryAlignments get(Query query) {
     QueryAlignments result = this.cache.get(query);
     /*if (result != null) {
-      System.out.println("Got cache hit for query " + query.format());
+      System.err.println("Got cache hit for query " + query.format());
       if (result.getNumQueries() == 1) {
         List<QueryAlignment> alignments = result.getFirstAlignments();
         if (alignments.size() == 1) {
           QueryAlignment alignment = alignments.get(0);
-          System.out.println("Components:");
+          System.err.println("Components:");
           for (SequenceAlignment sequenceAlignment: alignment.getComponents()) {
-            System.out.println("Component:");
-            System.out.println(sequenceAlignment.format());
+            System.err.println("Component:");
+            System.err.println(sequenceAlignment.format());
           }
         }
       }

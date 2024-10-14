@@ -25,7 +25,7 @@ public class SequenceSplitter implements SequenceProvider {
     // convert from Sequence back to SequenceBuilder
     // TODO: make this faster if it's important
     SequenceBuilder builder = new SequenceBuilder();
-    builder.setName(nextSequence.getName() + "[" + startIndex + ":" + endIndex + "]");
+    builder.setName(nextSequence.getName());
     builder.setPath(nextSequence.getPath());
     builder.add(nextSequence.getText());
     return builder;

@@ -467,11 +467,11 @@ public class Counting_HashBlockPath {
   }
 
   private String spaces(int count) {
-    String result = "";
+    StringBuilder builder = new StringBuilder();
     for (int i = 0; i < count; i++) {
-      result += " ";
+      builder.append(" ");
     }
-    return result;
+    return builder.toString();
   }
 
   HashBlockPath path;

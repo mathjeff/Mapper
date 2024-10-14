@@ -32,7 +32,7 @@ public class HashBlock_Database implements ReferenceProvider {
       this.addSequence(sequence);
     }
     this.sequenceDatabase = sequences;
-    System.out.println("total reference size: " + this.totalForwardSize * 2);
+    System.err.println("total reference size: " + this.totalForwardSize * 2);
     if (minInterestingSize < 0) {
       this.minInterestingSize = (int)Math.max((Math.log(this.totalForwardSize + 1) / Math.log(4)) - 2, 0);
     } else {
@@ -140,7 +140,7 @@ public class HashBlock_Database implements ReferenceProvider {
     } else {
       this.maxInterestingSize = requestSize * 2;
     }
-    System.out.println("hashing lengths " + (this.maxFullySetUpSize + 1) + " - " + this.maxInterestingSize);
+    System.err.println("hashing lengths " + (this.maxFullySetUpSize + 1) + " - " + this.maxInterestingSize);
     this.sequencesLeftToHash = new ArrayDeque<Sequence>(this.sequenceDatabase.getForwardSequencesOnly());
     this.cumulativeHashedSize = 0;
   }
@@ -210,7 +210,7 @@ public class HashBlock_Database implements ReferenceProvider {
           }
           cumulativeCapacity += row.getCapacity();
           if (row.getNumUniqueKeysUsed() > 0 || row.getCapacity() > 1) {
-            System.out.println("Hashed length " + i + ", usage " + row.getNumUniqueKeysUsed() + "/" + row.getCapacity() + ", saturation = " + row.getNumOverfilledKeys() + " keys, " + row.getTotalOverfill() + " values (cumulative capacity " + cumulativeCapacity + ") (num items added here " + row.getNumItemsAdded() + ") in " + row.getTotalAddMillis() + "ms");
+            System.err.println("Hashed length " + i + ", usage " + row.getNumUniqueKeysUsed() + "/" + row.getCapacity() + ", saturation = " + row.getNumOverfilledKeys() + " keys, " + row.getTotalOverfill() + " values (cumulative capacity " + cumulativeCapacity + ") (num items added here " + row.getNumItemsAdded() + ") in " + row.getTotalAddMillis() + "ms");
           }
         }
         this.statusLogger.log("Hashed reference through size " + this.maxInterestingSize, true);

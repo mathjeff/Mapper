@@ -17,7 +17,7 @@ public class Large_ByteBlockStore extends Medium_ByteBlockStore {
   // Most of the time this will be faster than calling put get, clear, and put
   @Override
   public int write(int blockIndex, int byteIndex, byte value) {
-    //System.out.println("write blockIndex " + blockIndex + " byteIndex " + byteIndex + " value " + value);
+    //System.err.println("write blockIndex " + blockIndex + " byteIndex " + byteIndex + " value " + value);
     this.byteArrays[byteIndex].put(blockIndex, value);
     return blockIndex;
   }

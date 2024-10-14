@@ -9,7 +9,7 @@ public class ByteArrayList {
 
   private void ensureCapacity(int capacity) {
     if (this.content.length < capacity) {
-      //System.out.println("ByteArrayList growing to capacity " + capacity);
+      //System.err.println("ByteArrayList growing to capacity " + capacity);
       byte[] newContent = new byte[capacity];
       for (int i = 0; i < this.content.length; i++) {
         newContent[i] = this.content[i];

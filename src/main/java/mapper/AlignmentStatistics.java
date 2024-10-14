@@ -21,4 +21,6 @@ public class AlignmentStatistics {
   long numCacheHits;
 
   long numIndels;
+
+  boolean containsLongRead;
 }

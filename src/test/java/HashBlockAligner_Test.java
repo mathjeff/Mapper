@@ -61,12 +61,12 @@ public class HashBlockAligner_Test {
     analysis.maxInsertionExtensionPenalty = expectedPenalty;
     analysis.maxDeletionExtensionPenalty = expectedPenalty;
     SequenceAlignment result = aligner.align(new SequenceSection(a, 0, a.getLength()), new SequenceSection(b, 0, b.getLength()), parameters, analysis);
-    System.out.println("penalty = " + result.getPenalty());
+    System.err.println("penalty = " + result.getPenalty());
     check(result, alignedTextA, alignedTextB, expectedPenalty);
   }
 
   private void check(SequenceAlignment alignment, String alignedTextA, String alignedTextB, double expectedPenalty) {
-    System.out.println("alignment penalty = " + alignment.getPenalty());
+    System.err.println("alignment penalty = " + alignment.getPenalty());
     if (!alignedTextA.equals(alignment.getAlignedTextA())) {
       fail("Expected alignment text a of " + alignedTextA + " with penalty " + expectedPenalty + ", got alignment of \n" + alignment.format() + " with penalty " + alignment.getPenalty());
     }

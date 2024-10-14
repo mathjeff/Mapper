@@ -96,7 +96,7 @@ public class MultiHashBlock_Test {
       Assert.fail("Not a hashblock: '" + text + "'");
     }
     HashBlock hashBlock = options.get(0);
-    System.out.println("Checking '" + ambiguous + "'");
+    System.err.println("Checking '" + ambiguous + "'");
     List<HashBlock> ambiguousHashed = hashString(ambiguous, null);
     if (!blockContains(ambiguousHashed, hashBlock)) {
       StringBuilder message = new StringBuilder();

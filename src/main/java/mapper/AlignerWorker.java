@@ -91,12 +91,12 @@ public class AlignerWorker extends Thread {
       try {
         moreWork = this.workQueue.take();
       } catch (InterruptedException e) {
-        System.out.println("Interrupted");
+        System.err.println("Interrupted");
         break;
       }
       if (!moreWork)
         break;
-      //System.out.println("Worker.run got " + queries.size() + " queries");
+      //System.err.println("Worker.run got " + queries.size() + " queries");
       try {
         this.process();
         succeeded = true;
@@ -148,8 +148,7 @@ public class AlignerWorker extends Thread {
       this.referenceDatabase.prepare();
       // now that we've hashed the reference, we can run queries
       // List that for each query says where it aligns
-      List<List<QueryAlignment>> alignments = new ArrayList<List<QueryAlignment>>();
-      List<Query> unalignedQueries = new ArrayList<Query>();
+      List<QueryAlignments> alignments = new ArrayList<QueryAlignments>();
       for (QueryBuilder queryBuilder : queries) {
         long start = System.currentTimeMillis();
         this.latestQueryAlignmentStart = start;
@@ -183,18 +182,17 @@ public class AlignerWorker extends Thread {
           this.queryAtRandomMoment = query;
         }
         // collect results
+        alignments.add(alignmentsHere);
         for (HashMap.Entry<Query, List<QueryAlignment>> componentAlignments: alignmentsHere.getAlignments().entrySet()) {
           Query subQuery = componentAlignments.getKey();
           List<QueryAlignment> subAlignments = componentAlignments.getValue();
           numIndels += countNumIndels(subAlignments);
 
           if (subAlignments.size() > 0) {
-            alignments.add(subAlignments);
             if (this.logger.getEnabled()) {
               this.printAlignment(subQuery, subAlignments);
             }
           } else {
-            unalignedQueries.add(subQuery);
             this.millisSpentOnUnalignedQueries += elapsed;
             if (this.logger.getEnabled()) {
               log("Unaligned    : " + query.format());
@@ -205,7 +203,7 @@ public class AlignerWorker extends Thread {
           log(" ");
         }
       }
-      this.sendResults(alignments, unalignedQueries);
+      this.sendResults(alignments);
     }
   }
 
@@ -668,10 +666,9 @@ public class AlignerWorker extends Thread {
     log("Penalty      : " + penalty + " (length: " + alignmentLength + ")");
   }
 
-  private void sendResults(List<List<QueryAlignment>> results, List<Query> unalignedQueries) {
+  private void sendResults(List<QueryAlignments> results) {
     for (AlignmentListener listener : this.resultsListeners) {
       listener.addAlignments(results);
-      listener.addUnaligned(unalignedQueries);
     }
     this.resultsCache.addHits(this.numCacheHits);
   }

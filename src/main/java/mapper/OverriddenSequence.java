@@ -20,7 +20,7 @@ public class OverriddenSequence extends Sequence {
     if (existingOverride != null) {
       throw new IllegalArgumentException("Cannot override " + this.getName() + "[" + offset + "] to " + Basepairs.decode(value) + " because it is already overridden to " + Basepairs.decode(existingOverride));
     }
-    //System.out.println("overriding " + this.getName() + "[" + offset + "] = " + Basepairs.decode(value));
+    //System.err.println("overriding " + this.getName() + "[" + offset + "] = " + Basepairs.decode(value));
 
     this.overrides.put(offset, value);
   }

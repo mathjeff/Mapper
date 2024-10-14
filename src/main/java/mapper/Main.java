@@ -1,8 +1,12 @@
 package mapper;
 
 import com.sun.management.HotSpotDiagnosticMXBean;
+import java.io.BufferedOutputStream;
+import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.lang.management.ManagementFactory;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -32,8 +36,8 @@ public class Main {
     long startMillis = System.currentTimeMillis();
     MapperMetadata.setMainArguments(args);
 
-    //System.out.println(MapperMetadata.guessCommandLine());
-    System.out.println("Mapper version " + MapperMetadata.getVersion());
+    //System.err.println(MapperMetadata.guessCommandLine());
+    System.err.println("Mapper version " + MapperMetadata.getVersion());
 
     // parse arguments
     List<String> referencePaths = new ArrayList<String>();
@@ -276,7 +280,7 @@ public class Main {
     alignmentLogger = new Logger(new PrintWriter(), 1, alignmentVerbosity);
     referenceLogger = new Logger(new PrintWriter(), 1, referenceVerbosity);
     if (maxErrorRate >= 0 && mutationPenalty >= 0 && hasPairedQueriesWithoutSpecifyingSpacing) {
-      usageError("Customized alignment penalties (--snp-penalty) and penalty threshold (--max-error-rate) without customizing spacing penalty between paired-end queries (--paired-queries <queries> <queries2> --spacing <expected> <distancePerPenalty>).\n Please specify --spacing explicitly.\n If you really don't want to change the default spacing penalty, you can specify --spacing " + defaultExpectedDistanceBetweenPairedSequences + " " + defaultSpacingDeviationPerUnitPenalty);
+      usageError("Customized alignment penalties (--snp-penalty) and penalty threshold (--max-penalty) without customizing spacing penalty between paired-end queries (--paired-queries <queries> <queries2> --spacing <expected> <distancePerPenalty>).\n Please specify --spacing explicitly.\n If you really don't want to change the default spacing penalty, you can specify --spacing " + defaultExpectedDistanceBetweenPairedSequences + " " + defaultSpacingDeviationPerUnitPenalty);
     }
 
     if (maxErrorRate < 0) {
@@ -328,13 +332,13 @@ public class Main {
     parameters.MaxNumMatches = maxNumMatches;
     parameters.Max_PenaltySpan = max_penaltySpan;
 
-    System.out.println("" + referencePaths.size() + " reference files:");
+    System.err.println("" + referencePaths.size() + " reference files:");
     for (String referencePath: referencePaths) {
-      System.out.println("Reference path = " + referencePath);
+      System.err.println("Reference path = " + referencePath);
     }
-    System.out.println("" + queries.size() + " sets of queries: ");
+    System.err.println("" + queries.size() + " sets of queries: ");
     for (QueryProvider queryBuilder : queries) {
-      System.out.println(queryBuilder.toString());
+      System.err.println(queryBuilder.toString());
     }
     boolean successful = run(referencePaths, queries, outVcfPath, vcfIncludeNonMutations, outSamPath, outRefsMapCountPath, outUnalignedPath, parameters, numThreads, queryEndFraction, autoVerbose, guessReferenceAncestors, outAncestorPath, enableGapmers, startMillis);
     if (successful)
@@ -350,11 +354,12 @@ public class Main {
 "  java -jar mapper.jar [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --queries <queries.fastq> [options]\n" +
 "  java -jar mapper.jar [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --paired-queries [--spacing <expected> <distancePerPenalty>]<queries.fastq> <queries2.fastq> [options]\n" +
 "\n" +
-"    Aligns genomic sequences quickly\n" +
+"    Aligns genomic sequences quickly and accurately using relatively high amounts of memory\n" +
 "\n" +
 "  INPUT:\n" +
 "\n" +
 "    --reference <file> the reference to use. Should be in .fasta/.fa/.fna or .fastq/.fq format or a .gz of one of those formats.\n" +
+"      May be specified multiple times for multiple reference genomes\n" +
 "\n" +
 "    --queries <file> the reads to align to the reference. Should be in .fastq or .fasta format.\n" +
 "      May be specified multiple times for multiple query files\n" +
@@ -372,7 +377,7 @@ public class Main {
 "      Disables ancestor inference.\n" +
 "\n" +
 "    --split-queries-past-size <size> Any queries longer than <size> will be split into smaller queries.\n" +
-"      THIS OPTION IS A TEMPORARY EXPERIMENT FOR DETECTING REARRANGEMENTS IN LONG READS.\n" +
+"      THIS OPTION IS A TEMPORARY EXPERIMENT FOR LONG READS TO DETECT REARRANGEMENTS AND IMPROVE PERFORMANCE.\n" +
 "\n" +
 "    --no-gapmers\n" +
 "      When Mapper attempts to identify locations at which the query might align to the reference, Mapper first splits the query into smaller pieces and looks for an exact match for each piece.\n" +
@@ -395,6 +400,7 @@ public class Main {
 "    Raw output\n" +
 "\n" +
 "      --out-sam <file> the output file in SAM format\n" +
+"        If <file> is '-', the SAM output will be written to stdout instead\n" +
 "\n" +
 "      --out-unaligned <file> output file containing unaligned reads. Must have a .fasta or .fastq extension\n" +
 "\n" +
@@ -467,7 +473,7 @@ public class Main {
     if (outVcfPath != null)
       writer = new VcfWriter(outVcfPath, vcfIncludeNonMutations, queryEndFraction);
 
-    System.out.println("Loading reference");
+    System.err.println("Loading reference");
     boolean keepQualityData = (outUnalignedPath != null);
     SequenceProvider reference = DataLoader.LoadFrom(referencePaths, false);
     List<Sequence> sortedReference = sortAndComplementReference(reference);
@@ -506,8 +512,17 @@ public class Main {
       listeners.add(matchDatabase);
     }
     SamWriter samWriter = null;
+    OutputStream samStreamToClose = null;
     if (outSamPath != null) {
-      samWriter = new SamWriter(originalReference, outSamPath, queries.get_containsPairedEndReads());
+      OutputStream samOutputStream;
+      if ("-".equals(outSamPath)) {
+        samOutputStream = System.out;
+      } else {
+        samOutputStream = new BufferedOutputStream(new FileOutputStream(new File(outSamPath)));
+        samStreamToClose = samOutputStream;
+      }
+
+      samWriter = new SamWriter(originalReference, samOutputStream, queries.get_containsPairedEndReads());
       listeners.add(samWriter);
     }
     UnalignedQuery_Writer unalignedWriter = null;
@@ -537,11 +552,11 @@ public class Main {
     if (outRefsMapCountPath != null) {
       long computationEnd = System.currentTimeMillis();
       long computationTime = (computationEnd - startMillis) / 1000;
-      System.out.println("Writing RefsMapCount results at " + computationTime + "s");
+      System.err.println("Writing RefsMapCount results at " + computationTime + "s");
       referenceAlignmentCounter.sumAlignments(outRefsMapCountPath);
       long writingEnd = System.currentTimeMillis();
       long writingTime = (writingEnd - startMillis) / 1000;
-      System.out.println("Saved " + outRefsMapCountPath + " at " + writingTime + "s");
+      System.err.println("Saved " + outRefsMapCountPath + " at " + writingTime + "s");
     }
     String displayCoverage = null;
     if (outVcfPath != null) {
@@ -549,9 +564,9 @@ public class Main {
       Map<Sequence, Alignments> alignments = matchDatabase.groupByPosition();
       long computationEnd = System.currentTimeMillis();
       double computationTime = (double)(computationEnd - startMillis) / 1000.0;
-      System.out.println("Writing vcf results at " + computationTime + "s");
+      System.err.println("Writing vcf results at " + computationTime + "s");
       writer.write(alignments, numThreads);
-      System.out.println("Saved " + outVcfPath);
+      System.err.println("Saved " + outVcfPath);
       long numMatchedPositions = writer.getNumReferencePositionsMatched();
       long numPositions = referenceDatabase.getTotalForwardSize();
 
@@ -565,34 +580,34 @@ public class Main {
       displayCoverage = " Coverage                      : " + displayCoverage + " of the reference (" + numMatchedPositions + "/" + numPositions + ") was matched";
     }
     // show statistics
-    System.out.println("");
-    System.out.println("Statistics: ");
+    System.err.println("");
+    System.err.println("Statistics: ");
     if (matchCounter.getNumMatchingSequences() != matchCounter.getNumAlignedQueries()) {
       // paired-end reads
       Distribution distance = matchCounter.getDistanceBetweenQueryComponents();
-      System.out.println(" Query pair separation distance: avg: " + (float)distance.getMean() + " stddev: " + (float)distance.getStdDev() + " (adjust via --spacing)");
+      System.err.println(" Query pair separation distance: avg: " + (float)distance.getMean() + " stddev: " + (float)distance.getStdDev() + " (adjust via --spacing)");
     }
-    System.out.println(" Alignment rate                : " + matchPercent + "% of query sequences (" + numMatchingQuerySequences + "/" + numQuerySequences + ")");
+    System.err.println(" Alignment rate                : " + matchPercent + "% of query sequences (" + numMatchingQuerySequences + "/" + numQuerySequences + ")");
     if (displayCoverage != null) {
-      System.out.println(displayCoverage);
+      System.err.println(displayCoverage);
     }
-    System.out.println(" Average penalty               : " + averagePenaltyPerBase + " per base (" + (long)totalAlignedPenalty + "/" + (long)totalAlignedQueryLength + ") in aligned queries");
+    System.err.println(" Average penalty               : " + averagePenaltyPerBase + " per base (" + (long)totalAlignedPenalty + "/" + (long)totalAlignedQueryLength + ") in aligned queries");
     if (statistics != null) {
       long numIndels = statistics.numIndels;
       float indelsPerPosition = (float)numIndels / (float)totalAlignedQueryLength;
-      System.out.println(" Num indels                    : " + indelsPerPosition + " per base (" + numIndels + "/" + (long)totalAlignedQueryLength + ") in aligned queries");
+      System.err.println(" Num indels                    : " + indelsPerPosition + " per base (" + numIndels + "/" + (long)totalAlignedQueryLength + ") in aligned queries");
     }
 
     if (statistics != null) {
-      System.out.println("");
-      System.out.println("Performance:");
+      System.err.println("");
+      System.err.println("Performance:");
 
       System.gc();
       Runtime runtime = Runtime.getRuntime();
       long maxAllowedMemory = runtime.maxMemory();
       long usedMemory = runtime.totalMemory() - runtime.freeMemory();
       long usedMemoryMB = usedMemory / 1024 / 1024;
-      System.out.println(" Ending memory usage: " + usedMemoryMB + "mb");
+      System.err.println(" Ending memory usage: " + usedMemoryMB + "mb");
 
       Query slowestQuery = statistics.slowestQuery;
 
@@ -604,32 +619,36 @@ public class Main {
           numAlignmentsText = "1 time";
         else
           numAlignmentsText = "" + numAlignments + " times";
-        System.out.println(" Slowest query: #" + slowestQuery.getId() + " (" + statistics.slowestQueryMillis + "ms) : " + queryDisplayText + " aligned " + numAlignmentsText);
+        System.err.println(" Slowest query: #" + slowestQuery.getId() + " (" + statistics.slowestQueryMillis + "ms) : " + queryDisplayText + " aligned " + numAlignmentsText);
       }
 
       Query queryAtRandomMoment = statistics.queryAtRandomMoment;
       if (queryAtRandomMoment != null) {
-        System.out.println(" Query at random moment: #" + queryAtRandomMoment.getId() + " : " + queryAtRandomMoment.format());
+        System.err.println(" Query at random moment: #" + queryAtRandomMoment.getId() + " : " + queryAtRandomMoment.format());
       }
 
       int millisOnUnalignedQueries = (int)(statistics.cpuMillisSpentOnUnalignedQueries / 1000 / numThreads);
-      System.out.println(" Unaligned queries took        : " + statistics.cpuMillisSpentOnUnalignedQueries + " cpu-ms (" + millisOnUnalignedQueries + "s)");
+      System.err.println(" Unaligned queries took        : " + statistics.cpuMillisSpentOnUnalignedQueries + " cpu-ms (" + millisOnUnalignedQueries + "s)");
 
       int immediateAcceptancePercent = (int)(statistics.numCasesImmediatelyAcceptingFirstAlignment * 100 / statistics.numQueriesLoaded);
-      System.out.println(" Immediately accepted          : " + immediateAcceptancePercent + "% alignments (" + statistics.numCasesImmediatelyAcceptingFirstAlignment + "/" + statistics.numQueriesLoaded + ")");
+      System.err.println(" Immediately accepted          : " + immediateAcceptancePercent + "% alignments (" + statistics.numCasesImmediatelyAcceptingFirstAlignment + "/" + statistics.numQueriesLoaded + ")");
       int millisAligningMatches = (int)(statistics.cpuMillisSpentAligningMatches / 1000 / numThreads);
-      System.out.println(" Time aligning matches         : " + statistics.cpuMillisSpentAligningMatches + " cpu-ms (" + millisAligningMatches + "s)");
+      System.err.println(" Time aligning matches         : " + statistics.cpuMillisSpentAligningMatches + " cpu-ms (" + millisAligningMatches + "s)");
       int millisThroughOptimisticBestAlignments = (int)(statistics.cpuMillisThroughOptimisticBestAlignments / 1000 / numThreads);
-      System.out.println(" Finding optimistic alignments : " + statistics.cpuMillisThroughOptimisticBestAlignments + " cpu-ms (" + millisThroughOptimisticBestAlignments + "s)");
+      System.err.println(" Finding optimistic alignments : " + statistics.cpuMillisThroughOptimisticBestAlignments + " cpu-ms (" + millisThroughOptimisticBestAlignments + "s)");
       int queriesLoadedFromCachePercent = (int)((long)100 * (long)statistics.numCacheHits / (long)statistics.numQueriesLoaded);
       int queriesSavedToCachePercent = (int)((long)100 * alignmentCache.getUsage() / (long)statistics.numQueriesLoaded);
       long numQueriesNotInCache = statistics.numQueriesLoaded - alignmentCache.getUsage() - statistics.numCacheHits;
       int queriesNotInCachePercent = (int)((long) 100 * (long)numQueriesNotInCache / (long)statistics.numQueriesLoaded);
 
-      System.out.println(" Alignment cache usage         : " + queriesLoadedFromCachePercent + "% (" + statistics.numCacheHits + ") loaded, " + queriesSavedToCachePercent + "% (" + alignmentCache.getUsage() + ") stored, " + queriesNotInCachePercent + "% (" + numQueriesNotInCache + ") skipped");
-      System.out.println(" Time reading queries          : " + statistics.millisReadingQueries + "ms");
-      System.out.println(" Time launching workers        : " + statistics.millisLaunchingWorkers + "ms");
-      System.out.println(" Time waiting for workers      : " + statistics.millisWaitingForWorkers + "ms");
+      System.err.println(" Alignment cache usage         : " + queriesLoadedFromCachePercent + "% (" + statistics.numCacheHits + ") loaded, " + queriesSavedToCachePercent + "% (" + alignmentCache.getUsage() + ") stored, " + queriesNotInCachePercent + "% (" + numQueriesNotInCache + ") skipped");
+      System.err.println(" Time reading queries          : " + statistics.millisReadingQueries + "ms");
+      System.err.println(" Time launching workers        : " + statistics.millisLaunchingWorkers + "ms");
+      System.err.println(" Time waiting for workers      : " + statistics.millisWaitingForWorkers + "ms");
+      if (statistics.containsLongRead) {
+        System.err.println("\n Not optimized for long reads. You might be interested in --split-queries-past-size.");
+      }
+
     }
     String successStatus;
     boolean successful = (statistics != null);
@@ -637,26 +656,26 @@ public class Main {
       successStatus = "Done";
     else
       successStatus = "Failed";
-    if (samWriter != null)
-      samWriter.close();
+    if (samStreamToClose != null)
+      samStreamToClose.close();
     if (unalignedWriter != null)
       unalignedWriter.close();
     long end = System.currentTimeMillis();
     double totalTime = ((double)end - (double)startMillis) / 1000.0;
-    System.out.println("");
-    System.out.println(successStatus + " in " + totalTime + "s.");
+    System.err.println("");
+    System.err.println(successStatus + " in " + totalTime + "s.");
     return successful;
   }
 
   public static void dumpHeap() throws IOException {
     String outputPath = "mapper.hprof";
-    System.out.println("dumping heap to " + outputPath);
+    System.err.println("dumping heap to " + outputPath);
     MBeanServer server = ManagementFactory.getPlatformMBeanServer();
     HotSpotDiagnosticMXBean bean =
         ManagementFactory.newPlatformMXBeanProxy(server,
         "com.sun.management:type=HotSpotDiagnostic", HotSpotDiagnosticMXBean.class);
     bean.dumpHeap("mapper.hprof", false);
-    System.out.println("dumped heap to " + outputPath);
+    System.err.println("dumped heap to " + outputPath);
   }
 
   public static AlignmentStatistics compare(ReferenceProvider referenceProvider, QueryProvider queries, DuplicationDetector approximateDuplicationDetector, long startMillis, AlignmentParameters parameters, int numThreads, double queryEndFraction, AlignmentCache alignmentCache, List<AlignmentListener> alignmentListeners, boolean autoVerbose) throws InterruptedException, IOException {
@@ -692,6 +711,8 @@ public class Main {
     boolean everSaturatedWorkers = false;
     List<AlignerWorker> pendingWorkers = new ArrayList<AlignerWorker>();
     int targetNumPendingJobsPerWorker = 10;
+    boolean warnedNotOptimizedForLongReads = false;
+    int warnReadsLongerThanLength = 1600;
     while (workers.size() > 0 || !doneReadingQueries || pendingQueries.size() > 0) {
       boolean progressed = false;
       if (workers.size() >= numThreads)
@@ -719,7 +740,14 @@ public class Main {
           numQueriesLoaded++;
           queryBuilder.setId(numQueriesLoaded);
           batch.add(queryBuilder);
-          totalLengthOfPendingQueries += queryBuilder.getLength();
+          int queryLength = queryBuilder.getLength();
+          if (queryLength > warnReadsLongerThanLength) {
+            if (!warnedNotOptimizedForLongReads) {
+              System.err.println("\n  Warning: Found read of length " + queryLength + ", longer than " + warnReadsLongerThanLength + ". This version of Mapper is not optimized for long reads. You may be interested in --split-queries-past-size\n");
+              warnedNotOptimizedForLongReads = true;
+            }
+          }
+          totalLengthOfPendingQueries += queryLength;
         }
         pendingQueries.add(batch);
         progressed = true;
@@ -784,7 +812,7 @@ public class Main {
             if (elapsed != lastPrintTime) {
               // note elapsed != 0 because lastPrintTime starts at 0
               long queriesPerSecond = numQueriesAssigned / elapsed;
-              System.out.println("Processing query " + numQueriesAssigned + " at " + elapsed + "s (" + queriesPerSecond + " q/s), " + workers.size() + " workers, " + pendingQueries.size() + "/" + targetNumPendingJobs + " ready jobs");
+              System.err.println("Processing query " + numQueriesAssigned + " at " + elapsed + "s (" + queriesPerSecond + " q/s), " + workers.size() + " workers, " + pendingQueries.size() + "/" + targetNumPendingJobs + " ready jobs");
               if (!checkMemoryUsage()) {
                 targetNumPendingJobsPerWorker = 1;
               }
@@ -802,7 +830,7 @@ public class Main {
         AlignerWorker worker = completedWorkers.take();
         boolean succeeded = worker.tryComplete();
         if (succeeded == false) {
-          System.out.println("Worker failed; aborting");
+          System.err.println("Worker failed; aborting");
           while (completedWorkers.peek() != null) {
             completedWorkers.take().tryComplete();
           }
@@ -856,6 +884,7 @@ public class Main {
     result.numQueriesLoaded = numQueriesLoaded;
     result.numCacheHits = numCacheHits;
     result.numIndels = numIndels;
+    result.containsLongRead = warnedNotOptimizedForLongReads;
 
     return result;
   }
@@ -869,7 +898,7 @@ public class Main {
       long maxAllowedMemoryMB = maxAllowedMemory / 1024 / 1024;
       long usedMemoryMB = usedMemory / 1024 / 1024;
       int usagePercent = (int)(usageFraction * 100);
-      System.out.println("Low memory! " + usagePercent + "% used (" + usedMemoryMB + "M/" + maxAllowedMemoryMB + "M). Try larger Xmx");
+      System.err.println("Low memory! " + usagePercent + "% used (" + usedMemoryMB + "M/" + maxAllowedMemoryMB + "M). Try larger Xmx");
       return false;
     }
     return true;

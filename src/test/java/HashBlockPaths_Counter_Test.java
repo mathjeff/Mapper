@@ -46,7 +46,7 @@ public class HashBlockPaths_Counter_Test {
   }
 
   private void checkDistance(String refText, String seq1Text, String seq2Text, int innerDistance, int outerDistance) {
-    System.out.println("checkDistance ref = '" + refText + "' seq1 = '" + seq1Text + "' seq2 = '" + seq2Text + "'");
+    System.err.println("checkDistance ref = '" + refText + "' seq1 = '" + seq1Text + "' seq2 = '" + seq2Text + "'");
     List<QueryMatch> matches = getMatches(refText, seq1Text, seq2Text);
     if (matches.size() != 1) {
       fail("Expected 1 match, got " + matches.size());

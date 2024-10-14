@@ -70,7 +70,7 @@ public class HashBlock_ParentRow implements HashBlock_Row {
     // set up some variables
     int afterIndex = this.maxPositionChecked;
     IMultiHashBlock leftBlock = this.previousBatch.getAfter(afterIndex);
-    //System.out.println("maybeMakeBlock index " + afterIndex);
+    //System.err.println("maybeMakeBlock index " + afterIndex);
     if (leftBlock == null) {
       // no more blocks to create
       this.maxPositionChecked = this.sequence.getLength();
@@ -139,7 +139,7 @@ public class HashBlock_ParentRow implements HashBlock_Row {
       throw new IllegalArgumentException("Cannot extend null block");
     IMultiHashBlock next = this.previousBatch.getAfter(startIndex);
     if (next == null) {
-      //System.out.println("No parent blocks remain, expansion done");
+      //System.err.println("No parent blocks remain, expansion done");
       // No HashBlocks remain to merge with
       return;
     }
@@ -149,7 +149,7 @@ public class HashBlock_ParentRow implements HashBlock_Row {
       if (intersectionCondition == null) {
         // It's not possible for this block to exist at the same time as the previous
         // If the previous hashblock merges with an alternate hashblock, it will be covered by another case
-        //System.out.println("Other condition " + rightOption.getCondition() + " conflicts with this condition " + startingCondition);
+        //System.err.println("Other condition " + rightOption.getCondition() + " conflicts with this condition " + startingCondition);
 
         if (foundAnIntersection) {
           // Conditions are sorted, with earlier positions being sorting keys than later positions
@@ -172,7 +172,7 @@ public class HashBlock_ParentRow implements HashBlock_Row {
       if (rightBlock == null) {
         // Under this set of conditions, no hashblock exists here
         // Check the next position
-        //System.out.println("Recursing again for rightOption condition " + rightOption.getCondition());
+        //System.err.println("Recursing again for rightOption condition " + rightOption.getCondition());
         this.expand(leftBlock, intersectionCondition, next.getStartIndex(), results);
         continue;
       }
@@ -182,7 +182,7 @@ public class HashBlock_ParentRow implements HashBlock_Row {
         // These hash blocks don't want to merge
         // There will probably be another pair of parent hashblocks that do want to merge, though
         // So, we record the fact that this pair doesn't want to merge by explicitly adding <null>
-        //System.out.println("Considered merging " + leftBlock.toString(this.sequence) + " and " + rightBlock.toString(this.sequence) + ", didn't merge");
+        //System.err.println("Considered merging " + leftBlock.toString(this.sequence) + " and " + rightBlock.toString(this.sequence) + ", didn't merge");
         results.add(new ConditionalHashBlock(null, intersectionCondition));
       } else {
         results.add(new ConditionalHashBlock(merged, intersectionCondition));

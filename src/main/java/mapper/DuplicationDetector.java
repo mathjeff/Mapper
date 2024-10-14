@@ -242,7 +242,7 @@ public class DuplicationDetector {
         }
         this.allDuplications = allDuplications;
 
-        System.out.println("DuplicationDetector done detecting duplications (through length " + this.maxSizeToProcess + ")");
+        System.err.println("DuplicationDetector done detecting duplications (through length " + this.maxSizeToProcess + ")");
       }
     }
   }

@@ -13,7 +13,7 @@ public class BufferedWriter implements TextWriter {
 
   public void flush() {
     for (String component : components) {
-      System.out.println(component);
+      System.err.println(component);
     }
     this.components.clear();
   }

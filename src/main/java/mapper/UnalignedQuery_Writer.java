@@ -7,6 +7,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 // An UnalignedQuery_Writer writes queries that did not align
 public class UnalignedQuery_Writer implements AlignmentListener {
@@ -29,14 +30,16 @@ public class UnalignedQuery_Writer implements AlignmentListener {
     this.writer = writer;
   }
   
-  public void addAlignments(List<List<QueryAlignment>> alignments) {
-  }
-
-  public void addUnaligned(List<Query> unalignedQueries) {
+  public void addAlignments(List<QueryAlignments> alignments) {
     synchronized(this) {
-      for (Query query: unalignedQueries) {
-        for (Sequence sequence: query.getSequences()) {
-          this.writer.write(sequence);
+      for (QueryAlignments queryAlignments: alignments) {
+        for (Map.Entry<Query, List<QueryAlignment>> subqueries: queryAlignments.getAlignments().entrySet()) {
+          if (subqueries.getValue().size() < 1) {
+            Query query = subqueries.getKey();
+            for (Sequence sequence: query.getSequences()) {
+              this.writer.write(sequence);
+            }
+          }
         }
       }
     }

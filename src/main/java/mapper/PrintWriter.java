@@ -5,7 +5,7 @@ public class PrintWriter implements TextWriter {
   }
 
   public void write(String message) {
-    System.out.println(message);
+    System.err.println(message);
   }
 
   public void flush() {

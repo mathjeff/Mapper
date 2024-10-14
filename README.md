@@ -6,16 +6,15 @@ Contact:\
  Dr. Anni Zhang, MIT, anniz44@mit.edu
 
 Usage:
-
   java -jar mapper.jar [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --queries <queries.fastq> [options]
-
   java -jar mapper.jar [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --paired-queries [--spacing <expected> <distancePerPenalty>]<queries.fastq> <queries2.fastq> [options]
 
-    Aligns genomic sequences quickly
+    Aligns genomic sequences quickly and accurately using relatively high amounts of memory
 
   INPUT:
 
     --reference <file> the reference to use. Should be in .fasta/.fa/.fna or .fastq/.fq format or a .gz of one of those formats.
+      May be specified multiple times for multiple reference genomes
 
     --queries <file> the reads to align to the reference. Should be in .fastq or .fasta format.
       May be specified multiple times for multiple query files
@@ -27,12 +26,13 @@ Usage:
         Any query alignment whose inner distance deviates from <expected> has an additional penalty added.
         That additional penalty equals (the difference between the actual distance and <expected>) divided by <distancePerPenalty>, unless the two query sequence alignments would overlap, in which case the additional penalty is 0.
 
+    --infer-ancestors
+      Requests that Mapper look for parts of the genome that likely shared a common ancestor in the past, and will lower the penalty of an alignment that mismatches the given reference but matches the inferred common ancestor.
     --no-infer-ancestors
-      By default, if Mapper detects several highly similar sections of the reference genome, it will infer that they likely shared a common ancestor in the past and will lower the penalty of an alignment that mismatches the given reference but matches the inferred common ancestor.
-      This flag disables that behavior.
+      Disables ancestor inference.
 
     --split-queries-past-size <size> Any queries longer than <size> will be split into smaller queries.
-      THIS OPTION IS A TEMPORARY EXPERIMENT FOR DETECTING REARRANGEMENTS IN LONG READS.
+      THIS OPTION IS A TEMPORARY EXPERIMENT FOR LONG READS TO DETECT REARRANGEMENTS AND IMPROVE PERFORMANCE.
 
     --no-gapmers
       When Mapper attempts to identify locations at which the query might align to the reference, Mapper first splits the query into smaller pieces and looks for an exact match for each piece.
@@ -55,6 +55,7 @@ Usage:
     Raw output
 
       --out-sam <file> the output file in SAM format
+        If <file> is '-', the SAM output will be written to stdout instead
 
       --out-unaligned <file> output file containing unaligned reads. Must have a .fasta or .fastq extension
 
@@ -105,6 +106,17 @@ Usage:
 
   OTHER:
 
+    Memory usage: to control the amount of memory that Java makes available to Mapper, give the appropriate arguments to Java:
+
+      -Xmx<amount> set <amount> as the maximum amount of memory to use.
+      -Xms<amount> set <amount> as the initial amount of memory to use.
+
+      For example, to start with 200 megabytes and increase up to 4 gigabytes as needed, do this
+
+        java -Xms200m -Xmx4g -jar mapper.jar <other mapper arguments>
+
     --num-threads <count> number of threads to use at once for processing. Higher values will run more quickly on a system that has that many CPUs available.
-    
+
+To make changes to Mapper, see [DEVELOPING.md](DEVELOPING.md)
+
 ## If you're working on a bioinformatics project and would be interested in some consulting help check out our website at https://genomiverse.net/ !

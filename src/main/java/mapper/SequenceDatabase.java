@@ -104,7 +104,7 @@ public class SequenceDatabase {
       if (thisByte < 0) {
         thisByte += 256;
       }
-      //System.out.println("Read encoded[" + readIndex + "] = " + thisByte);
+      //System.err.println("Read encoded[" + readIndex + "] = " + thisByte);
       currentValue = (long)(thisByte << (long)numPendingBits) + currentValue;
       numPendingBits += 8;
       if (numPendingBits >= this.numBitsPerPosition) {
@@ -136,7 +136,7 @@ public class SequenceDatabase {
 
   // Appends <newEncoded> to store[blockIndex] and returns the index of the resulting block
   public int writeEncodedPosition(ByteBlockStore store, int blockIndex, int existingNumItems, long newEncoded) {
-    //System.out.println("writeEncodedPosition existing num items = " + existingNumItems);
+    //System.err.println("writeEncodedPosition existing num items = " + existingNumItems);
     if (newEncoded < 0 || newEncoded > this.maxEncodableValue) {
       throw new IllegalArgumentException("Internal error: encoded position " + newEncoded + " is larger than the maximum supported encoded value " + this.maxEncodableValue);
     }

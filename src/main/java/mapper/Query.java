@@ -132,7 +132,7 @@ public class Query {
       return false;
     if (spacingDeviationPerUnitPenalty != other.spacingDeviationPerUnitPenalty)
       return false;
-    //System.out.println("Equal queries: " + this.toString() + " and " + other.toString());
+    //System.err.println("Equal queries: " + this.toString() + " and " + other.toString());
     return true;
   }
 

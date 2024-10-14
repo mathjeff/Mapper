@@ -1,26 +1,23 @@
 package mapper;
 
-import java.io.BufferedOutputStream;
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.ArrayDeque;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 
 // A SamWriter writes .sam files
 // See https://samtools.github.io/hts-specs/SAMv1.pdf for more information
 public class SamWriter implements AlignmentListener {
-  public SamWriter(SequenceDatabase sequenceDatabase, String path, boolean explainPairedEndReads) throws FileNotFoundException {
-    File file = new File(path);
-    this.fileStream = new FileOutputStream(file);
-    this.bufferedStream = new BufferedOutputStream(fileStream);
+  public SamWriter(SequenceDatabase sequenceDatabase, OutputStream outputStream, boolean explainPairedEndReads) {
+    this.outputStream = outputStream;
     // write header
     this.writeComment("Sequence Alignment Map");
-    this.writeComment("Format version, sort order");
-    this.write("@HD\tVN:1.6\tSO:unsorted\n");
+    this.writeComment("Format version, group order");
+    this.writeLine("@HD\tVN:1.6\tGO:query");
     this.writeComment("");
     this.writeComment("Invocation details (approximate)");
     this.writeInvocationDetails();
@@ -36,7 +33,7 @@ public class SamWriter implements AlignmentListener {
   private void writeInvocationDetails() {
     String version = MapperMetadata.getVersion();
     String invocation = MapperMetadata.guessCommandLine();
-    this.write("@PG\tID:mapper\tPN:mapper\tVN:" + version + "\tCL:\"" + invocation + "\"\n");
+    this.writeLine("@PG\tID:mapper\tPN:mapper\tVN:" + version + "\tCL:\"" + invocation + "\"");
   }
 
   private void writeReferenceSequenceNames(SequenceDatabase sequenceDatabase) {
@@ -45,14 +42,14 @@ public class SamWriter implements AlignmentListener {
     for (int i = 0; i < count; i++) {
       Sequence contig = sequenceDatabase.getSequence(i);
       if (contig.getComplementedFrom() == null)
-        this.write("@SQ\tSN:" + contig.getName() + "\tLN:" + contig.getLength() + "\n");
+        this.writeLine("@SQ\tSN:" + contig.getName() + "\tLN:" + contig.getLength());
     }
   }
 
   private void explainAlignmentFormat(boolean explainPairedEndReads) {
     this.writeComment("Format of a query alignment (one line per sequence):");
     StringBuilder formatCommentBuilder = new StringBuilder();
-    formatCommentBuilder.append(" Query name, flags (direction), reference contig, position, mapping quality (unused), CIGAR (indels), ");
+    formatCommentBuilder.append(" Query name, SAM flags, reference contig, position, mapping quality (unused), CIGAR (indels), ");
     if (explainPairedEndReads) {
       formatCommentBuilder.append("mate reference name, mate reference position, ");
     } else {
@@ -66,61 +63,81 @@ public class SamWriter implements AlignmentListener {
     }
     this.writeComment(formatCommentBuilder.toString());
     this.writeComment("");
-    this.writeComment("Alignment score format:");
     if (explainPairedEndReads) {
-      this.writeComment(" CAS:f:<float>   combined alignment score of this query and its mate = <float>");
-      this.writeComment("  Combined alignment score (CAS) = (mate1.score + mate2.score - overlap.score) * (mate1.length + mate2.length) / (unique length) + spacing.score . See --verbose output for more details.");
+      this.writeComment("  SAM Flags is a bitwise-or of these values:");
+    } else {
+      this.writeComment("  SAM Flags:");
+    }
+    if (explainPairedEndReads) {
+      this.writeComment("   1: This alignment comes from a paired-end read");
+      this.writeComment("   2: This alignment involves a read and its mate aligned near each other");
+      this.writeComment("   8: No alignment was found for this read mate's mate");
+    }
+    this.writeComment("   16: This read sequence is reverse-complemented relative to the reference");
+    if (explainPairedEndReads) {
+      this.writeComment("   32: This read's mate is reverse-complemented relative to the reference");
+      this.writeComment("   64: This read mate is mate #1");
+      this.writeComment("   128: This read mate is the last mate");
+      this.writeComment("   256: A better alignment was found for this query");
+    }
+    this.writeComment("");
+    this.writeComment("  Alignment score format:");
+    if (explainPairedEndReads) {
+      this.writeComment("   cs:f:<float>   combined alignment score of this query and its mate = <float>");
+      this.writeComment("    Combined alignment score (CAS) = (mate1.score + mate2.score - overlap.score) * (mate1.length + mate2.length) / (unique length) + spacing.score . See --verbose output for more details.");
       this.writeComment("");
     }
-    this.writeComment(" AS:f:<float>    score of alignment = <float>");
+    this.writeComment("   AS:f:<float>    score of alignment = <float>");
     this.writeComment("");
   }
 
-  public void addAlignments(List<List<QueryAlignment>> alignments) {
+  public void addAlignments(List<QueryAlignments> alignments) {
     this.writeAndFlush(this.format(alignments));
   }
 
-  public void addUnaligned(List<Query> unalignedQueries) {
-  }
-
-  public void close() {
-    try {
-      this.bufferedStream.close();
-    } catch (IOException e) {
-    }
-    try {
-      this.fileStream.close();
-    } catch (IOException e) {
-    }
-  }
-
-  private String format(List<List<QueryAlignment>> alignments) {
+  private String format(List<QueryAlignments> alignments) {
     StringBuilder builder = new StringBuilder();
-    for (List<QueryAlignment> queryAlignments: alignments) {
-      for (QueryAlignment queryAlignment: queryAlignments) {
-        try {
-          formatQueryAlignment(queryAlignment, builder);
-        } catch (Exception e) {
-          throw new RuntimeException("Failed to write alignment for " + queryAlignment.formatQuery(), e);
-        }
-      }
+    for (QueryAlignments queryAlignments: alignments) {
+      formatQueryAlignments(queryAlignments, builder);
     }
     return builder.toString();
   }
 
-  private void formatQueryAlignment(QueryAlignment queryAlignment, StringBuilder builder) {
-     String queryPenaltyFormatted = null;
-     if (queryAlignment.getNumSequences() > 1) {
-       queryPenaltyFormatted = formatQueryPenalty(queryAlignment);
+  // Given a list of alignments for a single query, adds them to the given StringBuilder
+  private void formatQueryAlignments(QueryAlignments candidateAlignments, StringBuilder builder) {
+    for (Map.Entry<Query, List<QueryAlignment>> subqueryAlignments: candidateAlignments.getAlignments().entrySet()) {
+      formatQueryAlignments(subqueryAlignments.getKey(), subqueryAlignments.getValue(), candidateAlignments, builder);
+    }
+  }
+
+  private void formatQueryAlignments(Query subquery, List<QueryAlignment> subqueryAlignments, QueryAlignments queryAlignments, StringBuilder builder) {
+    double minPenalty = Integer.MAX_VALUE;
+    for (QueryAlignment alignment: subqueryAlignments) {
+      minPenalty = Math.min(minPenalty, alignment.getPenalty());
+    }
+    for (QueryAlignment queryAlignment: subqueryAlignments) {
+      boolean hasMinimumPenalty = queryAlignment.getPenalty() == minPenalty;
+      try {
+        formatQueryAlignment(queryAlignment, queryAlignments, hasMinimumPenalty, builder);
+      } catch (Exception e) {
+        throw new RuntimeException("Failed to write alignment for " + queryAlignment.formatQuery(), e);
+      }
+    }
+  }
+
+  private void formatQueryAlignment(QueryAlignment subqueryAlignment, QueryAlignments queryAlignments, boolean hasMinimumPenalty, StringBuilder builder) {
+     String subqueryPenaltyFormatted = null;
+     if (subqueryAlignment.getNumSequences() > 1) {
+       subqueryPenaltyFormatted = formatQueryPenalty(subqueryAlignment);
      }
-     for (SequenceAlignment alignment: queryAlignment.getComponents()) {
+     for (SequenceAlignment alignment: subqueryAlignment.getComponents()) {
        Sequence query = alignment.getSequenceA();
        Sequence ref = alignment.getSequenceB();
        // QNAME
        builder.append(query.getSourceName());
        builder.append('\t');
        // FLAG
-       builder.append("" + getSamFlags(alignment));
+       builder.append("" + getSamFlags(alignment, subqueryAlignment, queryAlignments, hasMinimumPenalty));
        builder.append('\t');
        // RNAME
        builder.append(ref.getName());
@@ -157,7 +174,7 @@ public class SamWriter implements AlignmentListener {
          builder.append("" + (query.getLength() - queryLengthConsumed) + "S");
        }
        builder.append('\t');
-       SequenceAlignment pairedSequenceAlignment = getPaired(queryAlignment, alignment);
+       SequenceAlignment pairedSequenceAlignment = getPaired(subqueryAlignment, alignment);
        if (pairedSequenceAlignment != null) {
          // RNEXT:
          builder.append(pairedSequenceAlignment.getSequenceB().getName());
@@ -180,8 +197,8 @@ public class SamWriter implements AlignmentListener {
        // QUAL
        builder.append("*\t");
        // alignment score
-       if (queryPenaltyFormatted != null) {
-         builder.append(queryPenaltyFormatted);
+       if (subqueryPenaltyFormatted != null) {
+         builder.append(subqueryPenaltyFormatted);
          builder.append("\t");
        }
        builder.append(formatSequencePenalty(alignment));
@@ -196,7 +213,7 @@ public class SamWriter implements AlignmentListener {
 
   private String formatQueryPenalty(QueryAlignment alignment) {
     float score = (float)(-1 * alignment.getPenalty());
-    return "CAS:" + formatNumber(score);
+    return "cs:" + formatNumber(score);
   }
 
   private String formatNumber(double number) {
@@ -205,10 +222,62 @@ public class SamWriter implements AlignmentListener {
     return "f:" + roundedNumber;
   }
 
-  private int getSamFlags(SequenceAlignment alignment) {
+  // hasMinimumPenalty indicates whether the corresponding QueryAlignment has the minimum penalty among all discovered alignments for this query
+  private int getSamFlags(SequenceAlignment sequenceAlignment, QueryAlignment subqueryAlignment, QueryAlignments alignments, boolean hasMinimumPenalty) {
     int flags = 0;
-    if (alignment.isReferenceReversed()) {
+
+    // direction of alignment
+    boolean reverseComplemented = sequenceAlignment.isReferenceReversed();
+    if (reverseComplemented) {
       flags += 16;
+    }
+
+    // paired-end read information
+    int thisAlignmentNumSequences = subqueryAlignment.getNumSequences();
+    int numSubqueries = alignments.getNumQueries();
+    boolean queryHasMultipleSequences = (thisAlignmentNumSequences > 1) || (numSubqueries > 1);
+    if (queryHasMultipleSequences) {
+      // query has a mate
+      flags += 1;
+
+      boolean matesAlignedTogether = (subqueryAlignment.getNumSequences() > 1);
+      if (matesAlignedTogether) {
+        // mates appear to be have taken from nearby locations on the same contig
+        flags += 2;
+
+        SequenceAlignment pairedAlignment = getPaired(subqueryAlignment, sequenceAlignment);
+        boolean mateReverseComplemented = (pairedAlignment != null && pairedAlignment.isReferenceReversed());
+        if (mateReverseComplemented) {
+          flags += 32;
+        }
+      }
+
+      boolean mateAligned = (matesAlignedTogether || alignments.getNumQueriesHavingAlignments() > 1);
+      if (!mateAligned) {
+        flags += 8;
+      }
+
+      // first or second mate
+      Query firstSubquery = alignments.getFirstQuery();
+      Sequence firstSubqueryFirstSequence = firstSubquery.getSequence(0);
+      if (firstSubqueryFirstSequence.getComplementedFrom() != null)
+        firstSubqueryFirstSequence = firstSubqueryFirstSequence.getComplementedFrom();
+      Sequence thisQuerySequence = sequenceAlignment.getSequenceA();
+      if (thisQuerySequence.getComplementedFrom() != null)
+        thisQuerySequence = thisQuerySequence.getComplementedFrom();
+      boolean isFirstMate = (firstSubqueryFirstSequence == thisQuerySequence);
+      if (isFirstMate) {
+        flags += 64;
+      }
+      boolean isLastMate = !isFirstMate;
+      if (isLastMate) {
+        flags += 128;
+      }
+    }
+
+    // priority of alignment
+    if (!hasMinimumPenalty) {
+      flags += 256;
     }
     return flags;
   }
@@ -234,6 +303,10 @@ public class SamWriter implements AlignmentListener {
     }
   }
 
+  private void writeLine(String text) {
+    this.write(text + "\n");
+  }
+
   private void writeAndFlush(String text) {
     byte[] bytes = text.getBytes();
     synchronized(this.pendingWrites) {
@@ -246,7 +319,7 @@ public class SamWriter implements AlignmentListener {
   }
 
   private void writeComment(String comment) {
-    this.write("@CO " + comment + "\n");
+    this.writeLine("@CO\t" + comment);
   }
 
   private void flush() {
@@ -274,14 +347,13 @@ public class SamWriter implements AlignmentListener {
 
   private void sendToStream(byte[] block) {
     try {
-      this.bufferedStream.write(block);
+      this.outputStream.write(block);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
   }
 
-  FileOutputStream fileStream;
-  BufferedOutputStream bufferedStream;
+  OutputStream outputStream;
   Queue<byte[]> pendingWrites = new ArrayDeque<byte[]>();
   boolean activelyWriting = false;
 }

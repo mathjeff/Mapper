@@ -111,7 +111,7 @@ public class AncestryDetector implements ReferenceProvider {
         SequenceDatabase sequenceDatabase = new SequenceDatabase(forwardOverrides, true);
         this.result = new HashBlock_Database(sequenceDatabase, -1, -1, -1, this.resultingDatabaseEnableGapmers, this.statusLogger);
         this.considerSavingDatabase(sequenceDatabase);
-        System.out.println("AncestryDetector done");
+        System.err.println("AncestryDetector done");
       }
     }
     // wait for all workers to be done
@@ -409,7 +409,7 @@ public class AncestryDetector implements ReferenceProvider {
       }
     }
     SimilarityAnalysis result = new SimilarityAnalysis(sequence, analysisInitialIndex, bound, this.getMatchScore(duplication.getLength()));
-    //System.out.println("computeAnalysisBounds for duplication length " + duplication.getLength() + " at " + sequence.getName() + "[" + startIndex + "], polarity = " + polarity + " result: startIndex = " + analysisInitialIndex + " bound = " + bound + " (" + result + ")");
+    //System.err.println("computeAnalysisBounds for duplication length " + duplication.getLength() + " at " + sequence.getName() + "[" + startIndex + "], polarity = " + polarity + " result: startIndex = " + analysisInitialIndex + " bound = " + bound + " (" + result + ")");
     if ((result.boundIndex - result.startIndex) * polarity < 0) {
       return null; // If the polarity is backwards it means we found overlapping duplication of a different length, and the current duplication is considered to be not interesting
     }
@@ -468,7 +468,7 @@ public class AncestryDetector implements ReferenceProvider {
       }
     }
     if (duplicationsAreNew) {
-      System.out.println("AncestryDetector processing " + this.duplicationsToProcess.size() + " duplications");
+      System.err.println("AncestryDetector processing " + this.duplicationsToProcess.size() + " duplications");
       if (logger.getEnabled()) {
         logger.log("AncestryDetector processing " + this.duplicationsToProcess.size() + " duplications");
         for (Duplication duplication: allDuplications) {

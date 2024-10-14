@@ -49,8 +49,33 @@ public class QueryAlignments {
     return total;
   }
 
+  // Returns the number of subqueries that this alignment represents
+  // If our query wasn't a paired-end read, this number should be 1
+  // If our query was a paired-end read:
+  //  If neither mate aligned, this number should be 1
+  //  If both mates aligned together, this number should be 1
+  //  If one query aligned and one didn't, this number should be 2
+  //  If both aligned to different places, this number should be 2
   public int getNumQueries() {
     return alignments.size();
+  }
+
+  // Returns the number of queries for which we found an alignment.
+  // If our query wasn't a paired-end read:
+  //  this number should be 0 (unaligned) or 1 (aligned)
+  // If our query was a paired-end read:
+  //  If neither mate aligned anywhere, this should return 0
+  //  If both mates aligned together, this should return 1
+  //  If one mate aligned and one didn't, this should return 1
+  //  If both mates aligned but not together, this should return 2
+  public int getNumQueriesHavingAlignments() {
+    int count = 0;
+    for (Map.Entry<Query, List<QueryAlignment>> entry: this.alignments.entrySet()) {
+      if (entry.getValue().size() > 0) {
+        count++;
+      }
+    }
+    return count;
   }
 
   public Query getFirstQuery() {

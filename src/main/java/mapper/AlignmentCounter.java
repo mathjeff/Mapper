@@ -1,26 +1,35 @@
 package mapper;
 
 import java.util.List;
+import java.util.Map;
 
 public class AlignmentCounter implements AlignmentListener {
-  public void addAlignments(List<List<QueryAlignment>> alignments) {
+  public void addAlignments(List<QueryAlignments> alignments) {
     int newNumMatchingSequences = 0;
     int newNumMatchingQueries = 0;
     double newTotalAlignedPenalty = 0;
     long newTotalAlignedQueryLength = 0;
+    int numNewUnalignedQuerySequences = 0;
     Distribution newTotalDistanceBetweenComponents = new Distribution();
-    for (List<QueryAlignment> alignment : alignments) {
-      if (alignment.size() > 0) {
-        newNumMatchingQueries++;
-        newNumMatchingSequences += alignment.get(0).getNumSequences();
-
-        newTotalAlignedPenalty += alignment.get(0).getPenalty();
-        newTotalAlignedQueryLength += alignment.get(0).getALength();
-
-        double currentTotalDistanceBetweenComponents = 0;
-        for (QueryAlignment choice: alignment) {
-          newTotalDistanceBetweenComponents.add(choice.getTotalDistanceBetweenComponents(), (double)1.0 / (double)alignment.size());
+    for (QueryAlignments queryAlignments : alignments) {
+      for (Map.Entry<Query, List<QueryAlignment>> foundAlignments : queryAlignments.getAlignments().entrySet()) {
+        List<QueryAlignment> alignment = foundAlignments.getValue();
+        Query query = foundAlignments.getKey();
+        if (alignment.size() > 0) {
+          newNumMatchingQueries++;
+          newNumMatchingSequences += query.getNumSequences();
+  
+          newTotalAlignedPenalty += alignment.get(0).getPenalty();
+          newTotalAlignedQueryLength += alignment.get(0).getALength();
+  
+          double currentTotalDistanceBetweenComponents = 0;
+          for (QueryAlignment choice: alignment) {
+            newTotalDistanceBetweenComponents.add(choice.getTotalDistanceBetweenComponents(), (double)1.0 / (double)alignment.size());
+          }
+        } else {
+          numNewUnalignedQuerySequences += query.getNumSequences();
         }
+
       }
     }
     synchronized (this) {
@@ -29,16 +38,7 @@ public class AlignmentCounter implements AlignmentListener {
       this.totalAlignedPenalty += newTotalAlignedPenalty;
       this.totalAlignedQueryLength += newTotalAlignedQueryLength;
       this.distanceBetweenQueryComponents = this.distanceBetweenQueryComponents.plus(newTotalDistanceBetweenComponents);
-    }
-  }
-
-  public void addUnaligned(List<Query> unalignedQueries) {
-    int numNewUnalignedQueries = 0;
-    for (Query query: unalignedQueries) {
-      numNewUnalignedQueries += query.getNumSequences();
-    }
-    synchronized (this) {
-      this.numUnmatchedSequences += numNewUnalignedQueries;
+      this.numUnmatchedSequences += numNewUnalignedQuerySequences;
     }
   }
 
