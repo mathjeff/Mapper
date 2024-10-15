@@ -1,6 +1,6 @@
 Mapper: a fast, accurate aligner for genomic sequences
 
-Latest release version can be downloaded here: https://github.com/mathjeff/Mapper/releases/download/1.1.0-beta08/mapper-1.1.0-beta08.jar
+Latest release version can be downloaded here: https://github.com/mathjeff/Mapper/releases/download/1.1.0-beta10/mapper-1.1.0-beta10.jar
 
 Contact:\
  Dr. Anni Zhang, MIT, anniz44@mit.edu
