@@ -49,13 +49,13 @@ public class SamWriter implements AlignmentListener {
   private void explainAlignmentFormat(boolean explainPairedEndReads) {
     this.writeComment("Format of a query alignment (one line per sequence):");
     StringBuilder formatCommentBuilder = new StringBuilder();
-    formatCommentBuilder.append(" Query name, SAM flags, reference contig, position, mapping quality (unused), CIGAR (indels), ");
+    formatCommentBuilder.append(" Query name, SAM flags, reference contig, position, mapping quality, CIGAR (indels), ");
     if (explainPairedEndReads) {
       formatCommentBuilder.append("mate reference name, mate reference position, ");
     } else {
       formatCommentBuilder.append("mate reference name (unused), mate reference position (unused), ");
     }
-    formatCommentBuilder.append("query length, query sequence, quality (unused), ");
+    formatCommentBuilder.append("query length, query sequence, nucleotide quality (unused), ");
     if (explainPairedEndReads) {
       formatCommentBuilder.append("more (combined alignment score, aligment score)");
     } else {
@@ -80,6 +80,13 @@ public class SamWriter implements AlignmentListener {
       this.writeComment("   128: This read mate is the last mate");
       this.writeComment("   256: A better alignment was found for this query");
     }
+    this.writeComment("");
+    this.writeComment(" Alignment quality:");
+    this.writeComment("  Let P represent the probability that the alignment position does not correspond to the biologically closest ancestor.");
+    this.writeComment("  Alignment quality is an estimate of -10 * log(P) / log(1), rounded to the nearest integer, or 255 if unavailable.");
+    this.writeComment("  In this version of Mapper, we estimate this value using this model:");
+    this.writeComment("   0 if another alignment was found for this query with less penalty than this one");
+    this.writeComment("   255 otherwise");
     this.writeComment("");
     this.writeComment("  Alignment score format:");
     if (explainPairedEndReads) {
@@ -146,7 +153,8 @@ public class SamWriter implements AlignmentListener {
        builder.append(getSamReferencePosition(alignment));
        builder.append('\t');
        // MAPQ
-       builder.append("255\t");
+       int mappingQuality = getMappingQuality(hasMinimumPenalty);
+       builder.append("" + mappingQuality + "\t");
        // CIGAR flags
        int queryLengthConsumed = 0;
        for (AlignedBlock block : alignment.getSections()) {
@@ -203,6 +211,45 @@ public class SamWriter implements AlignmentListener {
        }
        builder.append(formatSequencePenalty(alignment));
        builder.append("\n");
+    }
+  }
+
+  // This function provides a simple model for calculating MAPQ.
+  //
+  // Mapping quality is defined by the SAM spec as:
+  //  -10 * log(Pr{mapping position is wrong}) / log(10), rounded to the nearest integer,
+  //  or 255 if this value is not available.
+  //
+  // We interpret this to refer to the probability that the given alignment does not refer to the position having the biologically closest ancestor among possible alignment positions in the reference.
+  //
+  // Theoretically, an entity could keep a database of all organisms and determine the evolutionary history of a genome sequence from there, but making such a database is too difficult for us to do here, and does not seem to be the intent of the SAM spec.
+  // The only data we have access to here is the set of query sequences and the reference genome.
+  //
+  // So, we further interpret this (the probability that the mapping position is wrong) to refer specifically to:
+  //  the probability that the given alignment does not refer to the position having the biologically closest ancestor among possible alignment positions in the reference,
+  //  as predicted by some model.
+  //
+  // It is too difficult for us to make a perfect model that correctly determines the evolutionary history of a given sequence based on that sequence and an arbitrary reference genome, particularly because organisms continue to evolve and the frequencies and probabilities of finding various sequences continue to change.
+  //
+  // However, we are told that making a prediction via a simple model may be more helpful to users than making no prediction, so we implement a simple model here.
+  private int getMappingQuality(boolean hasMinimumPenalty) {
+    if (!hasMinimumPenalty) {
+      // This alignment has more penalty than another alignment that we found in this genome.
+      // If we assume that lower-penalty alignments are at least as likely to represent the true biological history as higher-penalty alignments, then the probability that this alignment is incorrect is at least 1/2.
+      //
+      // In practice, if we examine some computed alignments for which we know the correct alignment, we observe the probability of the correct alignment to not be reported as having the minimum penalty is small: less than 10%.
+      // So, we expect that the probability that the lowest-penalty alignment is not the correct alignment is less than 10%.
+      // Then we expect that the probability that another alignment does not have the closest biological ancestor should be than 90%, which gives us a quality score of
+      // round(-10 * log(0.9) / log(10)) = round(0.457...) = 0
+      return 0;
+    } else {
+      // This alignment has the minimum penalty among alignments that we found for this read
+      // However:
+      // 1. We're not completely confident that there does not exist another alignment with lower penalty (sometimes we decide that an exhaustive search will take too long to be worth doing)
+      // 2. Even if this alignment gives the lowest possible penalty among possible alignments for this query to this reference genome, we still don't know whether this alignment is to the closest descendant of its true biological ancestor in the reference. It's possible that more mutations occurred between the common ancestor and the current reference genome.
+      //
+      // For practical use we believe it's sufficient at the moment to report that the probability is unavailable (255)
+      return 255;
     }
   }
 
