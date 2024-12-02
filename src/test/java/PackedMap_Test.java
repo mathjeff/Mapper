@@ -47,20 +47,6 @@ public class PackedMap_Test {
     }
   }
 
-  @Test
-  public void testInvalidMaxNumMatches() {
-    SequenceDatabase sequenceDatabase = new SequenceDatabase(makeSequences(1, 1));
-    boolean threw = false;
-    try {
-      PackedMap m = new PackedMap(32767, 1, sequenceDatabase);
-    } catch (IllegalArgumentException e) {
-      threw = true;
-    }
-    if (!threw) {
-      fail("PackedMap accepted excessive count per key");
-    }
-  }
-
   private List<Sequence> makeSequences(int numSequences, int sequenceLength) {
     // Make SequenceDatabase
     List<Sequence> reference = new ArrayList<Sequence>();

@@ -58,6 +58,10 @@ public class Readable_HashBlock_Database {
     return new SequencePosition(reverseComplement, startIndex);
   }
 
+  public void ensureHashed(int blockLength) {
+    getContainingMap(blockLength);
+  }
+
   public int getNumHashKeys(int blockLength) {
     PackedMap blocksOfThisSize = getContainingMap(blockLength);
     if (blocksOfThisSize == null)
@@ -65,14 +69,14 @@ public class Readable_HashBlock_Database {
     return blocksOfThisSize.getCapacity();
   }
 
-  public int getNumMatches(HashBlock block) {
+  public int getNumMatchesLowerBound(HashBlock block) {
     if (block.getNumBasepairsUsed() < this.minInterestingSize)
       return Integer.MAX_VALUE;
     PackedMap m = this.getContainingMap(block);
     if (m == null)
       return Integer.MAX_VALUE;
     int key2 = block.getLookupKey();
-    return m.getNumMatches(block);
+    return m.getNumMatchesLowerBound(block);
   }
 
   public int getMaxNumMatchesAllowed(HashBlock block) {

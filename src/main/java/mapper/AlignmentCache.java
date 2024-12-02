@@ -40,13 +40,8 @@ class AlignmentCache {
     }
   }
 
-  public long estimateNumUniqueQueries() {
-    synchronized(this.statsLock) {
-      long cacheSize = this.cache.size();
-      // If there are N unique queries and we've tried sqrt(N) of them, we should get approximately 1 cache hit
-      // If there are N unique queries and we've tried N of them, we should get approximately N cache hits
-      return cacheSize * cacheSize / (this.numHits + 1);
-    }
+  public long getNumHits() {
+    return this.numHits;
   }
 
   private ConcurrentHashMap<Query, QueryAlignments> cache = new ConcurrentHashMap<Query, QueryAlignments>();

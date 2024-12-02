@@ -2,12 +2,26 @@ package mapper;
 
 // a ByteArrayList is just an ArrayList<Byte> without the overhead of an extra pointer in each location
 
-public class ByteArrayList {
+public class ByteArrayList implements BytesView {
 
   public ByteArrayList() {
+    this.content = new byte[8];
   }
 
-  private void ensureCapacity(int capacity) {
+  public ByteArrayList(int initialCapacity) {
+    this.content = new byte[initialCapacity];
+  }
+
+  public ByteArrayList(BytesView content) {
+    int size = content.size();
+    this.content = new byte[size];
+    for (int i = 0; i < size; i++) {
+      this.content[i] = content.get(i);
+    }
+    this.count = size;
+  }
+
+  public void ensureCapacity(int capacity) {
     if (this.content.length < capacity) {
       //System.err.println("ByteArrayList growing to capacity " + capacity);
       byte[] newContent = new byte[capacity];
@@ -35,9 +49,6 @@ public class ByteArrayList {
   }
 
   public byte get(int index) {
-    if (index >= this.count) {
-      throw new IndexOutOfBoundsException("Requested index " + index + " from array of length " + this.count);
-    }
     return this.content[index];
   }
 
@@ -59,6 +70,10 @@ public class ByteArrayList {
     return this.content.length;
   }
 
-  private byte[] content = new byte[8];
+  public ByteArrayList writable() {
+    return this;
+  }
+
+  private byte[] content;
   private int count;
 }

@@ -21,11 +21,11 @@ public class HashBlock_Database implements ReferenceProvider {
     this.initialize(sequences, -1, -1, -1, true, statusLogger);
   }
 
-  public HashBlock_Database(SequenceDatabase sequences, int minInterestingSize, int initialMaxInterestingSize, int maxNumShortMatches, boolean enableGapmers, StatusLogger statusLogger) {
-    this.initialize(sequences, minInterestingSize, initialMaxInterestingSize, maxNumShortMatches, enableGapmers, statusLogger);
+  public HashBlock_Database(SequenceDatabase sequences, int minInterestingSize, int hintMaxInterestingSize, int maxNumShortMatches, boolean enableGapmers, StatusLogger statusLogger) {
+    this.initialize(sequences, minInterestingSize, hintMaxInterestingSize, maxNumShortMatches, enableGapmers, statusLogger);
   }
 
-  private void initialize(SequenceDatabase sequences, int minInterestingSize, int initialMaxInterestingSize, int maxNumShortMatches, boolean enableGapmers, StatusLogger statusLogger) {
+  private void initialize(SequenceDatabase sequences, int minInterestingSize, int hintMaxInterestingSize, int maxNumShortMatches, boolean enableGapmers, StatusLogger statusLogger) {
     this.statusLogger = statusLogger;
     this.enableGapmers = enableGapmers;
     for (Sequence sequence : sequences.getAll()) {
@@ -38,7 +38,19 @@ public class HashBlock_Database implements ReferenceProvider {
     } else {
       this.minInterestingSize = minInterestingSize;
     }
-    this.maxInterestingSize = initialMaxInterestingSize;
+    if (hintMaxInterestingSize > 0) {
+      if (sequences.getTotalForwardSize() > 1000000000L) {
+        // The reference sequences are really large and we might not have enough memory
+        // Start by hashing a smaller size to reduce the maximum memory usage (due to uncompressed pending adds)
+        // After hashing the smaller size we can hash the larger size
+        this.maxInterestingSize = (hintMaxInterestingSize + 1) / 2;
+      } else {
+        // The reference sequences don't seem to be too large so we try to save all of the interesting hashblocks in the first pass over the reference
+        this.maxInterestingSize = hintMaxInterestingSize;
+      }
+    } else {
+      this.maxInterestingSize = -1;
+    }
     if (maxNumShortMatches < 0) {
       // Advancing to the next level approximately multiplies the number of hashblocks by about 3/4.
 
@@ -148,7 +160,7 @@ public class HashBlock_Database implements ReferenceProvider {
   // called by a thread to contribute to setting up
   public void helpSetUp() {
     this.helpHash();
-    this.helpOrder();
+    this.helpPack();
   }
 
   // helps hash the reference and waits until done hashing
@@ -199,7 +211,6 @@ public class HashBlock_Database implements ReferenceProvider {
       boolean important = (numSequencesRemaining == 0);
       this.statusLogger.log("Hashed contig " + completionIndex + "/" + numForwardSequences + " (" + percentComplete + "%) with " + previousNumActiveHashers + " active workers", important);
       if (numSequencesRemaining < 1) {
-        int cumulativeCapacity = 0;
         while (size >= this.hashedBlocks.size())
           this.hashedBlocks.add(null);
         for (int i = 0; i <= size; i++) {
@@ -208,45 +219,53 @@ public class HashBlock_Database implements ReferenceProvider {
             row = new PackedMap(1, 1, this.sequenceDatabase);
             this.hashedBlocks.set(i, row);
           }
-          cumulativeCapacity += row.getCapacity();
-          if (row.getNumUniqueKeysUsed() > 0 || row.getCapacity() > 1) {
-            System.err.println("Hashed length " + i + ", usage " + row.getNumUniqueKeysUsed() + "/" + row.getCapacity() + ", saturation = " + row.getNumOverfilledKeys() + " keys, " + row.getTotalOverfill() + " values (cumulative capacity " + cumulativeCapacity + ") (num items added here " + row.getNumItemsAdded() + ") in " + row.getTotalAddMillis() + "ms");
-          }
         }
         this.statusLogger.log("Hashed reference through size " + this.maxInterestingSize, true);
         for (int i = this.maxFullySetUpSize + 1; i < size; i++) {
           PackedMap map = this.hashedBlocks.get(i);
           if (map != null)
-            this.mapsLeftToOrder.add(map);
+            this.mapsLeftToPack.add(map);
         }
-        this.statusLogger.log("Ordering deterministically blocks with length through " + this.maxInterestingSize, true);
+        this.statusLogger.log("Compressing blocks with length through " + this.maxInterestingSize, true);
       }
     }
   }
 
-  private void helpOrder() {
+  private void helpPack() {
     while (true) {
       synchronized(this) {
-        if (this.mapsLeftToOrder.size() < 1) {
+        if (this.mapsLeftToPack.size() < 1) {
           return;
         }
       }
-      helpOrderOnce();
+      helpPackOnce();
     }
   }
 
-  private void helpOrderOnce() {
+  private void helpPackOnce() {
     PackedMap map = null;
     synchronized(this) {
-      if (this.mapsLeftToOrder.size() < 1)
+      if (this.mapsLeftToPack.size() < 1)
         return;
-      map = mapsLeftToOrder.remove();
-      this.numActiveOrderers++;
+      map = mapsLeftToPack.remove();
+      this.numActivePackers++;
     }
-    map.orderDeterministically();
+    map.pack();
     synchronized(this) {
-      this.numActiveOrderers--;
-      if (mapsLeftToOrder.size() < 1 && this.numActiveOrderers < 1) {
+      this.numActivePackers--;
+      if (mapsLeftToPack.size() < 1 && this.numActivePackers < 1) {
+
+        int cumulativeCapacity = 0;
+        while (this.maxInterestingSize >= this.hashedBlocks.size())
+          this.hashedBlocks.add(null);
+        for (int i = 0; i <= this.maxInterestingSize; i++) {
+          PackedMap row = this.hashedBlocks.get(i);
+          cumulativeCapacity += row.getCapacity();
+          if (row.getCapacity() > 1) {
+            System.err.println("Hashed length " + i + " into " + row.getCapacity() + " bins, saturated " + row.getNumOverfilledKeys() + " bins (cumulative capacity " + cumulativeCapacity + ") (num items added here " + row.getNumItemsAdded() + ") in " + row.getTotalAddMillis() + "ms");
+          }
+        }
+
         this.maxFullySetUpSize = this.maxInterestingSize;
         this.statusLogger.log("Processed reference through size " + this.maxFullySetUpSize, true);
       }
@@ -453,9 +472,9 @@ public class HashBlock_Database implements ReferenceProvider {
   long totalForwardSize;
   SequenceDatabase sequenceDatabase;
   Queue<Sequence> sequencesLeftToHash = new ArrayDeque<Sequence>();
-  Queue<PackedMap> mapsLeftToOrder = new ArrayDeque<PackedMap>();
+  Queue<PackedMap> mapsLeftToPack = new ArrayDeque<PackedMap>();
   int numActiveHashers;
-  int numActiveOrderers;
+  int numActivePackers;
   StatusLogger statusLogger;
   long cumulativeHashedSize;
   boolean enableGapmers = true;

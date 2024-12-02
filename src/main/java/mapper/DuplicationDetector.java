@@ -56,7 +56,7 @@ public class DuplicationDetector {
 
   public void setup(Readable_DuplicationDetector view, Logger logger) {
     this.detect(logger);
-    view.setup(this.duplicationsBySequence, this.allDuplications);
+    view.setup(this.duplicationsBySequence);
   }
 
   // tells the maximum average distance that can between consecutive mutations for us to not detect a duplication
@@ -74,6 +74,20 @@ public class DuplicationDetector {
 
   public int getWindowSize() {
     return this.windowSize;
+  }
+
+  // must have called detect() first
+  public Set<Duplication> getAll() {
+    if (this.allDuplications == null) {
+      synchronized(this) {
+        Set<Duplication> all = new HashSet<Duplication>();
+        for (TreeMap<Integer, Duplication> duplicationsHere: this.duplicationsBySequence.values()) {
+          all.addAll(duplicationsHere.values());
+        }
+        this.allDuplications = all;
+      }
+    }
+    return this.allDuplications;
   }
 
   private void detect(Logger logger) {
@@ -97,13 +111,20 @@ public class DuplicationDetector {
     return -1;
   }
 
+  private Readable_HashBlock_Database getHashblockDatabase(Logger logger) {
+    Readable_HashBlock_Database database = this.hashblockDatabaseProvider.get_HashBlock_database(logger).getView();
+    // Ensure a consistent hashed length even if we visit block lengths out of order
+    database.ensureHashed(this.minSizeToProcess + 1);
+    return database;
+  }
+
   private void process(int blockLength, Logger logger) {
     this.statusLogger.log("DuplicationDetector starting to process length " + blockLength, false);
-    Map<Sequence, TreeMap<Integer, Duplication>> blocks = new HashMap<Sequence, TreeMap<Integer, Duplication>>();
-    Readable_HashBlock_Database hashblockDatabase = this.hashblockDatabaseProvider.get_HashBlock_database(logger).getView();
+    Readable_HashBlock_Database hashblockDatabase = this.getHashblockDatabase(logger);
 
     // visit blocks of this size
     int numBlocks = hashblockDatabase.getNumHashKeys(blockLength);
+    Map<Sequence, TreeMap<Integer, Duplication>> blocks = new HashMap<Sequence, TreeMap<Integer, Duplication>>();
     for (int hashcode = 0; hashcode < numBlocks; hashcode++) {
       if (hashcode % 1000 == 0) {
         this.statusLogger.log("DuplicationDetector starting to process hashcode " + hashcode + " / " + numBlocks + " for length " + blockLength, false);
@@ -138,6 +159,10 @@ public class DuplicationDetector {
             matchingPositions.addPosition(position);
           }
         }
+        // for each group, remove any positions that are listed twice
+        for (Duplication group: positionsByText.values()) {
+          group.removeDuplicatePositions();
+        }
         // for each group, save it at the locations of each of its elements
         for (Duplication group: positionsByText.values()) {
           if (group.getNumInstances() >= this.minNumInterestingCopies) {
@@ -155,9 +180,37 @@ public class DuplicationDetector {
           }
         }
       }
+
+      // periodically copy results from blocks into this.duplicationsBySequence
+      if (hashcode % 10000 == 9999 || hashcode == numBlocks - 1) {
+        saveDuplications(blocks);
+        blocks = new HashMap<Sequence, TreeMap<Integer, Duplication>>();
+      }
     }
 
-    // copy results from blocks into this.duplicationsBySequence
+    // record that we're done
+    synchronized(this) {
+      this.numUncompleteJobs--;
+      if (this.numUncompleteJobs < 1) {
+        // don't need the HashBlock_Database anymore
+        this.hashblockDatabaseProvider = null;
+
+        // Check whether we need to keep the Duplications
+        if (this.windowSize > 1) {
+          // Clear the Duplications
+          for (Map<Integer, Duplication> entrySetHere: this.duplicationsBySequence.values()) {
+            for (Map.Entry<Integer, Duplication> entry: entrySetHere.entrySet()) {
+              entry.setValue(null);
+            }
+          }
+        }
+
+        System.err.println("DuplicationDetector done detecting duplications (through length " + this.maxSizeToProcess + ")");
+      }
+    }
+  }
+
+  private void saveDuplications(Map<Sequence, TreeMap<Integer, Duplication>> blocks) {
     for (Map.Entry<Sequence, TreeMap<Integer, Duplication>> entry: blocks.entrySet()) {
       Sequence sequence = entry.getKey();
       TreeMap<Integer, Duplication> currentPositionsOnThisSequence = entry.getValue();
@@ -225,26 +278,6 @@ public class DuplicationDetector {
         }
       }
     }
-
-    // record that we're done
-    synchronized(this) {
-      this.numUncompleteJobs--;
-      if (this.numUncompleteJobs < 1) {
-        // don't need the HashBlock_Database anymore
-        this.hashblockDatabaseProvider = null;
-
-        // copy results into allDuplications
-        Set<Duplication> allDuplications = new HashSet<Duplication>();
-        for (TreeMap<Integer, Duplication> values: this.duplicationsBySequence.values()) {
-          for (Duplication duplication: values.values()) {
-            allDuplications.add(duplication);
-          }
-        }
-        this.allDuplications = allDuplications;
-
-        System.err.println("DuplicationDetector done detecting duplications (through length " + this.maxSizeToProcess + ")");
-      }
-    }
   }
 
   // Compares two duplications to determine which one is better to keep
@@ -273,7 +306,12 @@ public class DuplicationDetector {
 
     if (this.windowSize > 1) {
       // Within a certain window, prefer to keep the Duplication having more copies, because that shouldn't require retaining as many objects
-      return duplication1.getNumInstances() - duplication2.getNumInstances();
+      int countDifference = duplication1.getNumInstances() - duplication2.getNumInstances();
+      if (countDifference != 0)
+        return countDifference;
+      // Break ties based on start position
+      if (start1 != start2)
+        return start1 - start2;
     }
     return 0;
   }

@@ -352,6 +352,7 @@ public class Main {
 "\n" +
 "Usage:\n"+
 "  java -jar mapper.jar [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --queries <queries.fastq> [options]\n" +
+"\n" +
 "  java -jar mapper.jar [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --paired-queries [--spacing <expected> <distancePerPenalty>]<queries.fastq> <queries2.fastq> [options]\n" +
 "\n" +
 "    Aligns genomic sequences quickly and accurately using relatively high amounts of memory\n" +
@@ -497,7 +498,9 @@ public class Main {
       referenceProvider = new HashBlock_Database(originalReference, -1, maxDuplicationLength, -1, enableGapmers, statusLogger);
     }
 
-    DuplicationDetector approximateDuplicationDetector = new DuplicationDetector(referenceProvider, minDuplicationLength, maxDuplicationLength, 2, 100, statusLogger);
+    // We store some approximate duplication locations to help us determine which parts of the reference might be unique
+    int duplicationWindowLength = 1000;
+    DuplicationDetector approximateDuplicationDetector = new DuplicationDetector(referenceProvider, minDuplicationLength, maxDuplicationLength, 2, duplicationWindowLength, statusLogger);
 
     long now = System.currentTimeMillis();
     long elapsed = (now - startMillis) / 1000;
@@ -690,7 +693,7 @@ public class Main {
 
     long numQueriesLoaded = 0;
     long numQueriesAssigned = 0;
-    int maxNumBasesPerJob = 500000;
+    int maxNumBasesPerJob = 50000;
     int workerIndex = 0;
     boolean doneReadingQueries = false;
     List<List<QueryBuilder>> pendingQueries = new ArrayList<List<QueryBuilder>>();

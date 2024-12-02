@@ -81,26 +81,38 @@ public class SequenceDatabase {
     }
   }
 
+  public int getNumBitsPerPosition() {
+    return this.numBitsPerPosition;
+  }
+
   public int getDecodedLength(byte[] encoded) {
-    return encoded.length * 8 / this.numBitsPerPosition;
+    return getDecodedLength(encoded.length);
+  }
+
+  public int getDecodedLength(int numBytes) {
+    int numBytesPerPosition = (this.numBitsPerPosition + 7) / 8;
+    return numBytes / numBytesPerPosition;
   }
 
   public int getEncodedLength(int itemLength) {
-    return (itemLength * this.numBitsPerPosition + 7) / 8;
+    int numBytesPerPosition = (this.numBitsPerPosition + 7) / 8;
+    return itemLength * numBytesPerPosition;
   }
 
   // decodes the given byte array into an array of positions
-  public SequencePosition[] unpackPositions(ByteBlockStore store, int blockIndex, int numBytes) {
-    if (numBytes < 1)
+  public SequencePosition[] unpackPositions(ByteKeyStore store, int blockIndex) {
+    BytesView bytes = store.get(blockIndex);
+    if (bytes == null)
       return null;
-    int numPositions = numBytes * 8 / this.numBitsPerPosition;
+    int numBytes = bytes.size();
+    int numBytesPerPosition = (this.numBitsPerPosition + 7) / 8;
+    int numPositions = numBytes / numBytesPerPosition;
     SequencePosition[] result = new SequencePosition[numPositions];
-    int readIndex = 0;
     int writeIndex = 0;
     long currentValue = 0;
     int numPendingBits = 0;
-    while (readIndex < numBytes) {
-      long thisByte = store.getAt(blockIndex, readIndex);
+    for (int readIndex = 0; readIndex < numBytes; readIndex++) {
+      long thisByte = bytes.get(readIndex);
       if (thisByte < 0) {
         thisByte += 256;
       }
@@ -108,7 +120,7 @@ public class SequenceDatabase {
       currentValue = (long)(thisByte << (long)numPendingBits) + currentValue;
       numPendingBits += 8;
       if (numPendingBits >= this.numBitsPerPosition) {
-        numPendingBits -= this.numBitsPerPosition;
+        numPendingBits = 0;
         long currentPosition = currentValue & this.maxEncodableValue;
         SequencePosition decoded = decodePosition(currentPosition);
 
@@ -126,51 +138,28 @@ public class SequenceDatabase {
         }
 
         result[writeIndex] = decoded;
-        currentValue = (long)(currentValue >> this.numBitsPerPosition);
+        currentValue = (long)(currentValue >> (numBytesPerPosition * 8));
         writeIndex++;
       }
-      readIndex++;
     }
     return result;
   }
 
-  // Appends <newEncoded> to store[blockIndex] and returns the index of the resulting block
-  public int writeEncodedPosition(ByteBlockStore store, int blockIndex, int existingNumItems, long newEncoded) {
-    //System.err.println("writeEncodedPosition existing num items = " + existingNumItems);
+  // Tries to append <newEncoded> to store[blockIndex] and returns whether there was room to add it
+  public void appendEncodedPosition(ByteKeyStore store, int blockIndex, long newEncoded) {
     if (newEncoded < 0 || newEncoded > this.maxEncodableValue) {
       throw new IllegalArgumentException("Internal error: encoded position " + newEncoded + " is larger than the maximum supported encoded value " + this.maxEncodableValue);
     }
-    int numBitsUsed = existingNumItems * this.numBitsPerPosition;
-    int numBytesHavingData = (numBitsUsed + 7) / 8;
-    int numBitsRemainingInLastByte = 8 * numBytesHavingData - numBitsUsed;
+    //System.err.println("writeEncodedPosition store " + store + " blockIndex " + blockIndex + " existing num items = " + existingNumItems + " numBitsPerPosition " + this.numBitsPerPosition);
+    int numBytesPerPosition = (this.numBitsPerPosition + 7) / 8;
 
-    // identify what the new item is and where to put it
-    int writeIndex;
-    long newCombinedValue;
-    if (numBitsRemainingInLastByte > 0) {
-      int numBitsUsedInLastByte = 8 - numBitsRemainingInLastByte;
-      int existingPartialByte = store.getAt(blockIndex, numBytesHavingData - 1);
-      newCombinedValue = (long)existingPartialByte + (long)(newEncoded << numBitsUsedInLastByte);
-      writeIndex = numBytesHavingData - 1;
-    } else {
-      writeIndex = numBytesHavingData;
-      newCombinedValue = newEncoded;
+    byte[] bytes = new byte[numBytesPerPosition];
+    long value = newEncoded;
+    for (int i = 0; i < bytes.length; i++) {
+      bytes[i] = (byte)(value & 255);
+      value = value >> 8;
     }
-
-    // add the new item into the array
-    int newNumItems = existingNumItems + 1;
-    int newNumBitsUsed = newNumItems * this.numBitsPerPosition;
-    int newNumBytesUsed = (newNumBitsUsed + 7) / 8;
-    if (newNumBytesUsed > store.getNumBytesPerBlock()) {
-      throw new IllegalArgumentException("writeEncodedPosition newNumItems = " + newNumItems + " newNumBytesUsed = " + newNumBytesUsed + " larger than capacity " + store.getNumBytesPerBlock());
-    }
-    while (writeIndex < newNumBytesUsed) {
-      blockIndex = store.write(blockIndex, writeIndex, (byte)(newCombinedValue & 255));
-      newCombinedValue = newCombinedValue >> 8;
-      writeIndex++;
-    }
-
-    return blockIndex;
+    store.add(blockIndex, bytes);
   }
 
   // Converts from a long to a SequencePosition

@@ -82,7 +82,7 @@ public class HashBlockPath {
       if (!this.hasFewEnoughMatches(extended)) {
         if (this.logger.getEnabled()) {
           HashBlock block = extended;
-          int numMatches = this.database.getNumMatches(block);
+          int numMatches = this.database.getNumMatchesLowerBound(block);
           String numMatchesText;
           if (numMatches == Integer.MAX_VALUE)
             numMatchesText = "uncounted";
@@ -149,7 +149,7 @@ public class HashBlockPath {
     } else {
       HashBlock extended = this.withGap();
       if (extended != null) {
-        int numMatches = this.database.getNumMatches(extended);
+        int numMatches = this.database.getNumMatchesLowerBound(extended);
 
         // We would like to have few enough matches for the search to be fast
         // Each subsequent level reduces the number of hashblocks to about 3/4
@@ -206,14 +206,21 @@ public class HashBlockPath {
   private int getMaxNumMatchesAllowed(HashBlock block) {
     // For hashblocks that use a small fraction of the query, we can probably just lengthen the hashblock and try again
     // If a hashblock can't be lengthed much more, we allow checking more matches instead
-    if (block.getLength() >= this.query.getLength() / 5) {
+    if (block.getLength() >= this.query.getLength() / 6) {
       return this.database.getMaxNumMatchesAllowed(block);
     }
-    return block.getNumBasepairsUsed();
+    if (block.get_requestMergeRight()) {
+      // We can merge this hashblock to the right, so the next hashblock doesn't need to shift by much
+      // So, we only need a small number of matches
+      return 5;
+    } else {
+      // We might not be able to merge this hashblock to the right
+      return block.getNumBasepairsUsed();
+    }
   }
 
   private boolean hasFewEnoughMatches(HashBlock block) {
-    return database.getNumMatches(block) <= getMaxNumMatchesAllowed(block);
+    return database.getNumMatchesLowerBound(block) <= getMaxNumMatchesAllowed(block);
   }
 
   private IMultiHashBlock getStartingBlock(int level) {

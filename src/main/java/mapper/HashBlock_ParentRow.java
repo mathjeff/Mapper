@@ -198,6 +198,8 @@ public class HashBlock_ParentRow implements HashBlock_Row {
   }
 
   private boolean shouldMergeBlocks(HashBlock left, HashBlock right) {
+    if (left.getEndIndex() < right.getStartIndex())
+      return false; // a block inbetween was removed due to too much ambiguity
     if (left.get_requestMergeRight())
       return true;
     if (right.get_requestMergeLeft())

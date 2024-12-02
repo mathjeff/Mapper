@@ -327,6 +327,9 @@ public class HashBlock implements IMultiHashBlock {
 
   // whether this hashblock (rather than its reverse complement) is worth saving in a hash table
   public boolean isPrimaryPolarity() {
+    // Prefer to save hashblocks having extensions going to the left so that almost all saved hashblocks are oriented in the same direction
+    if (this.requestMergeLeft != this.requestMergeRight)
+      return this.requestMergeLeft;
     return this.forwardHash >= this.reverseHash;
   }
 

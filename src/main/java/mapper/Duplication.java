@@ -1,21 +1,27 @@
 package mapper;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.lang.Iterable;
-import java.util.TreeSet;
+import java.util.List;
 
 class Duplication {
   public Duplication(int length) {
     this.length = length;
     // disallow duplicate positions, which can happen occasionally if two gapped hashblocks have exactly the same start and end position
-    this.startPositions = new TreeSet<SequencePosition>();
+    this.startPositions = new ArrayList<SequencePosition>();
   }
 
   public void addPosition(SequencePosition startPosition) {
     this.startPositions.add(startPosition);
   }
 
-  public Iterable<SequencePosition> getStartPositions() {
+  public List<SequencePosition> getStartPositions() {
     return this.startPositions;
+  }
+
+  public void removeDuplicatePositions() {
+    this.startPositions = new ArrayList<SequencePosition>(new HashSet<SequencePosition>(this.startPositions));
   }
 
   public int getLength() {
@@ -38,5 +44,5 @@ class Duplication {
   }
 
   private int length;
-  private TreeSet<SequencePosition> startPositions;
+  private List<SequencePosition> startPositions;
 }

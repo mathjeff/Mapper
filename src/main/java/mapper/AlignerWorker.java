@@ -72,6 +72,7 @@ public class AlignerWorker extends Thread {
     millisSpentAligningMatches = 0;
     millisThroughOptimisticBestAlignments = 0;
     numCasesImmediatelyAcceptingFirstAlignment = 0;
+    numIndels = 0;
   }
 
   public void noMoreQueries() {
@@ -118,21 +119,25 @@ public class AlignerWorker extends Thread {
   }
 
   private void process() {
-    long estimatedNumUniqueQueries = this.resultsCache.estimateNumUniqueQueries();
-    double cacheEnableFraction;
-    if (estimatedNumUniqueQueries < estimatedTotalNumQueries / 2) {
-      // We expect to have lots of queries but not many unique queries, so the cache should be pretty helpful
+
+    // First figure out how often to enable the cache
+    // If we have evidence that the cache always works, then we want the cache to always be enabled.
+    // If the cache has never worked, we want to enable it occasionally (n^(1/3) times) to double check whether it can work.
+    // If we have no data, we want to enable the cache a little bit to check whether it can work.
+
+    double numCacheHits = this.resultsCache.getNumHits();
+    double numSavedResults = this.resultsCache.getUsage();
+    double estimatedNewNumSavedResults = numSavedResults + Math.pow(this.queries.size(), 1.0/3.0);
+
+    double cacheEnableFraction = (numCacheHits * numCacheHits + 1.0) / (estimatedNewNumSavedResults * estimatedNewNumSavedResults + 1);
+    if (cacheEnableFraction > 1)
       cacheEnableFraction = 1;
-    } else {
-      // We expect to not have many duplicate queries, so the cache shouldn't be very helpful
-      // We still keep the cache enabled for some queries so we can double check
-      cacheEnableFraction = Math.pow(estimatedTotalNumQueries + 1, (-1.0 / 3.0));
-    }
+
     long numHashcodesToCache = (long)((double)(Integer.MAX_VALUE) * (double)(cacheEnableFraction) * 2);
     this.maxHashcodeToCache = Integer.MIN_VALUE + numHashcodesToCache;
 
     if (logger.getEnabled()) {
-      logger.log("Estimate effectively " + estimatedNumUniqueQueries + " unique queries and " + estimatedTotalNumQueries + " total queries; cache enabled fraction = " + cacheEnableFraction + ", using cache for hashcodes up to " + this.maxHashcodeToCache);
+      logger.log("Num cache hits = " + numCacheHits + " num cache entries = " + numSavedResults + " num queries = " + this.queries.size() + "; cache enabled fraction = " + cacheEnableFraction + ", using cache for hashcodes up to " + this.maxHashcodeToCache);
     }
 
     if (this.queries.size() < 1) {
@@ -509,12 +514,12 @@ public class AlignerWorker extends Thread {
     int windowEnd = (int)(matchMiddle + interestingWindow);
 
 
-    Duplication duplication = duplicationDetector.mayContainDuplicationInRange(originalReference, windowStart, windowEnd);
+    Integer duplicationIndex = duplicationDetector.mayContainDuplicationInRange(originalReference, windowStart, windowEnd);
 
 
-    if (duplication != null) {
+    if (duplicationIndex != null) {
       if (logger.getEnabled()) {
-        logger.log("Match at " + optimisticBestMatch.summarizePositionB() + " is within approximately " + interestingWindow + " of duplication: " + duplication);
+        logger.log("Match at " + optimisticBestMatch.summarizePositionB() + " is within approximately " + interestingWindow + " of duplication at: " + duplicationIndex);
       }
       hasNearbyDuplication = true;
     } else {

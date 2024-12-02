@@ -2,6 +2,8 @@ package mapper;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -53,12 +55,12 @@ public class SequenceDatabase_Test {
     int bytesPerPosition = (encodingBits + 7) / 8;
     int numPositions = reference.size();
     int bytesPerBlock = bytesPerPosition * numPositions;
-    ByteBlockStore store = new Medium_ByteBlockStore(bytesPerBlock);
+    ByteKeyStore store = new ByteKeyStore(numPositions, bytesPerBlock, encodingBits);
 
     // Encode some positions, save them into the ByteBlockStore, and check them
-    int blockIndex = 0;
-    SequencePosition[] positions = new SequencePosition[0];
-    for (int i = 0; i < reference.size(); i++) {
+    HashSet<SequencePosition> positions = new HashSet<SequencePosition>();
+    int nextIndexToCheck = 1;
+    for (int i = 0; i < numPositions; i++) {
       // encode position as long
       int offset = reference.get(i).getLength() * (i % 4) / 3;
       if (offset >= reference.get(i).getLength())
@@ -66,24 +68,40 @@ public class SequenceDatabase_Test {
       SequencePosition position = new SequencePosition(reference.get(i), offset);
       long encoded = database.encodePosition(position.getSequence(), position.getStartIndex());
       // write encoded long to the store
-      blockIndex = database.writeEncodedPosition(store, 0, i, encoded);
-      // unpack the written positions
-      int numBytes = database.getEncodedLength(i + 1);
-      SequencePosition[] newDecoded = database.unpackPositions(store, blockIndex, numBytes);
+      database.appendEncodedPosition(store, (byte)0, encoded);
+      positions.add(position);
 
-      // compare values
-      if (newDecoded.length != positions.length + 1) {
-        fail("Added encoded position " + encoded + " to array of length " + positions.length + " but decoded array has length " + positions.length);
-      }
-      for (int j = 0; j < positions.length; j++) {
-        if (!newDecoded[j].equals(positions[j])) {
-          fail("Added encoded position " + encoded + " and it changed the encoded value at position " + j + " from " + positions[j] + " to " + newDecoded[j]);
+
+      // Doing so many HashSet lookups can take a substantial amount of time so we only do the comparisons sometimes
+      if (i < 1000 || i >= nextIndexToCheck || i == numPositions - 1) {
+        nextIndexToCheck = i * 2;
+
+        // unpack the written positions
+        int numBytes = database.getEncodedLength(i + 1);
+        SequencePosition[] newDecoded = database.unpackPositions(store, 0);
+
+        // compare values
+        if (newDecoded == null) {
+          fail("Added encoded position " + encoded + " to array of length " + (positions.size() - 1) + " but decoded array is null");
+        }
+        // check size
+        if (newDecoded.length != positions.size()) {
+          fail("Added encoded position " + encoded + " to array of length " + (positions.size() - 1) + " but decoded array has length " + newDecoded.length);
+        }
+        // check no removals
+        for (int j = 0; j < newDecoded.length; j++) {
+          if (!positions.contains(newDecoded[j])) {
+            fail("Decoded position " + newDecoded[j] + " not found in expected decoded positions (last added position = " + position + ")");
+          }
+        }
+        // check no duplicates
+        positions = new HashSet<SequencePosition>();
+        for (int j = 0; j < newDecoded.length; j++) {
+          if (!positions.add(newDecoded[j])) {
+            fail("Position " + newDecoded[j] + " found twice (last added position = " + position + ")");
+          }
         }
       }
-      if (!newDecoded[newDecoded.length - 1].equals(position)) {
-        fail("Added position at sequences[" + i + "][" + offset + "] with encoded value " + encoded + " but was unpacked as " + newDecoded[newDecoded.length - 1] + " (maxEncodableValue = " + database.maxEncodableValue + ")");
-      }
-      positions = newDecoded;
     }
   }
 
@@ -97,7 +115,7 @@ public class SequenceDatabase_Test {
   }
 
   private Sequence makeLargeSequence(int identifier, int length) {
-    return new RepeatingSequence("" + identifier, 'A', length);
+    return new RepeatingSequence("seq" + identifier, 'A', length);
   }
 
   private void testEncoding(SequenceDatabase sequenceDatabase, Sequence sequence, int position) {

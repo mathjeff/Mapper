@@ -25,7 +25,7 @@ public class Readable_DuplicationDetector {
   // If so, returns a non-null Duplication
   // Usually, the returned Duplication will be in the given range, but not necessarily
   // (It's possible that we didn't save the Duplication that is in this range)
-  public Duplication mayContainDuplicationInRange(Sequence sequence, int startIndex, int endIndex) {
+  public Integer mayContainDuplicationInRange(Sequence sequence, int startIndex, int endIndex) {
     int windowStart = duplicationDetector.getWindowNumber(startIndex);
     int windowEnd = duplicationDetector.getWindowNumber(endIndex);
     TreeMap<Integer, Duplication> entriesHere = getInterestingDuplicationsOnSequence(sequence);
@@ -35,24 +35,20 @@ public class Readable_DuplicationDetector {
     if (previous != null) {
       int previousWindow = duplicationDetector.getWindowNumber(previous.getKey());
       if (previousWindow >= windowStart && previousWindow <= windowEnd)
-        return previous.getValue();
+        return previous.getKey();
     }
     Map.Entry<Integer, Duplication> next = entriesHere.ceilingEntry(startIndex);
     if (next != null) {
       int nextWindow = duplicationDetector.getWindowNumber(next.getKey());
       if (nextWindow >= windowStart && nextWindow <= windowEnd)
-        return next.getValue();
+        return next.getKey();
     }
     return null;
   }
 
-  // Returns all detected duplications
-  // Some duplications might also contain others
-  // To filter out positions where a Duplication contains other duplications, use getInterestingDuplicationsOnSequence
-  // Note that even if one position of a Duplication container another Duplication, other positions of that duplication might not, if gapmers are enabled (and they're enabled by default)
   public Set<Duplication> getAll() {
     this.ensureSetup();
-    return this.allDuplications;
+    return this.duplicationDetector.getAll();
   }
 
   public double getDetectionGranularity() {
@@ -69,13 +65,11 @@ public class Readable_DuplicationDetector {
     }
   }
 
-  public void setup(Map<Sequence, TreeMap<Integer, Duplication>> interestingDuplicationsBySequence, Set<Duplication> allDuplications) {
+  public void setup(Map<Sequence, TreeMap<Integer, Duplication>> interestingDuplicationsBySequence) {
     this.interestingDuplicationsBySequence = interestingDuplicationsBySequence;
-    this.allDuplications = allDuplications;
   }
 
   DuplicationDetector duplicationDetector;
   Map<Sequence, TreeMap<Integer, Duplication>> interestingDuplicationsBySequence;
-  Set<Duplication> allDuplications;
   Logger logger;
 }
