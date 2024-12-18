@@ -31,9 +31,9 @@ public class SamWriter implements AlignmentListener {
   }
 
   private void writeInvocationDetails() {
-    String version = MapperMetadata.getVersion();
-    String invocation = MapperMetadata.guessCommandLine();
-    this.writeLine("@PG\tID:mapper\tPN:mapper\tVN:" + version + "\tCL:\"" + invocation + "\"");
+    String version = XMapperMetadata.getVersion();
+    String invocation = XMapperMetadata.guessCommandLine();
+    this.writeLine("@PG\tID:x-mapper\tPN:x-mapper\tVN:" + version + "\tCL:\"" + invocation + "\"");
   }
 
   private void writeReferenceSequenceNames(SequenceDatabase sequenceDatabase) {
@@ -83,8 +83,8 @@ public class SamWriter implements AlignmentListener {
     this.writeComment("");
     this.writeComment(" Alignment quality:");
     this.writeComment("  Let P represent the probability that the alignment position does not correspond to the biologically closest ancestor.");
-    this.writeComment("  Alignment quality is an estimate of -10 * log(P) / log(1), rounded to the nearest integer, or 255 if unavailable.");
-    this.writeComment("  In this version of Mapper, we estimate this value using this model:");
+    this.writeComment("  Alignment quality is an estimate of -10 * log(P) / log(10), rounded to the nearest integer, or 255 if unavailable.");
+    this.writeComment("  In this version of X-Mapper, we estimate this value using this model:");
     this.writeComment("   0 if another alignment was found for this query with less penalty than this one");
     this.writeComment("   255 otherwise");
     this.writeComment("");

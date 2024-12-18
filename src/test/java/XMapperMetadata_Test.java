@@ -5,12 +5,12 @@ import java.nio.file.Paths;
 import org.junit.Assert;
 import org.junit.Test;
 
-public class MapperMetadata_Test {
+public class XMapperMetadata_Test {
   @Test
   public void simplificationOfSubdir() {
     Path a = Paths.get("/a");
     Path abc = Paths.get("/a/b/c");
-    Path abcFromA = MapperMetadata.simplifyPath(abc, a);
+    Path abcFromA = XMapperMetadata.simplifyPath(abc, a);
     // "b/c" should be simpler than "/a/b/c"
     checkPathsEqual(abcFromA, Paths.get("b/c"));
   }
@@ -19,7 +19,7 @@ public class MapperMetadata_Test {
   public void simplificationOfNearParentDir() {
     Path ab = Paths.get("/a/b");
     Path abc = Paths.get("/a/b/c");
-    Path abFromAbc = MapperMetadata.simplifyPath(ab, abc);
+    Path abFromAbc = XMapperMetadata.simplifyPath(ab, abc);
     // ".." should be simpler than "/a/b"
     checkPathsEqual(abFromAbc, Paths.get(".."));
   }
@@ -28,7 +28,7 @@ public class MapperMetadata_Test {
   public void simplificationOfFarParentDir() {
     Path a = Paths.get("/a");
     Path abc = Paths.get("/a/b/c");
-    Path aFromAbc = MapperMetadata.simplifyPath(a, abc);
+    Path aFromAbc = XMapperMetadata.simplifyPath(a, abc);
     // "/a" should be simpler than "../.."
     checkPathsEqual(aFromAbc, a);
   }

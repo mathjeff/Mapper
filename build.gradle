@@ -36,14 +36,14 @@ dependencies {
 
 task release(type: Copy) {
   from "build/libs"
-  include "mapper.jar"
+  include "x-mapper.jar"
   into "build/libs"
-  rename("mapper.jar", "mapper-${gitVersion}.jar")
+  rename("x-mapper.jar", "x-mapper-${gitVersion}.jar")
   dependsOn("build")
 }
 
 def expandProperties = new HashMap<String, String>()
-expandProperties["mapperVersion"] = gitVersion
+expandProperties["xmapperVersion"] = gitVersion
 project.tasks["processResources"].configure { processTask ->
   processTask.expand(expandProperties)
   processTask.inputs.property("properties", expandProperties)

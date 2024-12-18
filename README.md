@@ -1,14 +1,14 @@
-Mapper: a fast, accurate aligner for genomic sequences
+X-Mapper: a fast, accurate aligner for genomic sequences
 
-Latest release version can be downloaded here: https://github.com/mathjeff/Mapper/releases/download/1.1.0-beta12/mapper-1.1.0-beta12.jar
+Latest release version can be downloaded here: https://github.com/mathjeff/Mapper/releases/download/1.1.0-beta13/x-mapper-1.1.0-beta13.jar
 
 Contact:\
  Dr. Anni Zhang, MIT, anniz44@mit.edu
 
 Usage:
-  java -jar mapper.jar [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --queries <queries.fastq> [options]
+  java -jar x-mapper.jar [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --queries <queries.fastq> [options]
 
-  java -jar mapper.jar [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --paired-queries [--spacing <expected> <distancePerPenalty>]<queries.fastq> <queries2.fastq> [options]
+  java -jar x-mapper.jar [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --paired-queries [--spacing <expected> <distancePerPenalty>]<queries.fastq> <queries2.fastq> [options]
 
     Aligns genomic sequences quickly and accurately using relatively high amounts of memory
 
@@ -28,7 +28,7 @@ Usage:
         That additional penalty equals (the difference between the actual distance and <expected>) divided by <distancePerPenalty>, unless the two query sequence alignments would overlap, in which case the additional penalty is 0.
 
     --infer-ancestors
-      Requests that Mapper look for parts of the genome that likely shared a common ancestor in the past, and will lower the penalty of an alignment that mismatches the given reference but matches the inferred common ancestor.
+      Requests that X-Mapper look for parts of the genome that likely shared a common ancestor in the past, and will lower the penalty of an alignment that mismatches the given reference but matches the inferred common ancestor.
     --no-infer-ancestors
       Disables ancestor inference.
 
@@ -36,7 +36,7 @@ Usage:
       THIS OPTION IS A TEMPORARY EXPERIMENT FOR LONG READS TO DETECT REARRANGEMENTS AND IMPROVE PERFORMANCE.
 
     --no-gapmers
-      When Mapper attempts to identify locations at which the query might align to the reference, Mapper first splits the query into smaller pieces and looks for an exact match for each piece.
+      When X-Mapper attempts to identify locations at which the query might align to the reference, X-Mapper first splits the query into smaller pieces and looks for an exact match for each piece.
       By default, these pieces contain noncontiguous basepairs and might look like XXXXXXXX____XXXX.
       This flag makes these pieces be contiguous instead to look more like XXXXXXXXXXXX.
       THIS OPTION IS A TEMPORARY EXPERIMENT FOR TESTING THE PERFORMANCE OF GAPMERS.
@@ -86,7 +86,7 @@ Usage:
     --max-penalty <fraction> (default 0.1) for a match to be reported, its penalty must be no larger than this value times its length
       Setting this closer to 0 will run more quickly
 
-    --max-penalty-span <extraPenalty> (default --snp-penalty / 2) After Mapper finds an alignment having a certain penalty, Mapper will also look for and report alignments having penalties no more than <extraPenalty> additional penalty.
+    --max-penalty-span <extraPenalty> (default --snp-penalty / 2) After X-Mapper finds an alignment having a certain penalty, X-Mapper will also look for and report alignments having penalties no more than <extraPenalty> additional penalty.
       To only report alignments having the minimum penalty, set this to 0.
 
     Computing the penalty of a match:
@@ -107,17 +107,17 @@ Usage:
 
   OTHER:
 
-    Memory usage: to control the amount of memory that Java makes available to Mapper, give the appropriate arguments to Java:
+    Memory usage: to control the amount of memory that Java makes available to X-Mapper, give the appropriate arguments to Java:
 
       -Xmx<amount> set <amount> as the maximum amount of memory to use.
       -Xms<amount> set <amount> as the initial amount of memory to use.
 
       For example, to start with 200 megabytes and increase up to 4 gigabytes as needed, do this
 
-        java -Xms200m -Xmx4g -jar mapper.jar <other mapper arguments>
+        java -Xms200m -Xmx4g -jar x-mapper.jar <other x-mapper arguments>
 
     --num-threads <count> number of threads to use at once for processing. Higher values will run more quickly on a system that has that many CPUs available.
 
-To make changes to Mapper, see [DEVELOPING.md](DEVELOPING.md)
+To make changes to X-Mapper, see [DEVELOPING.md](DEVELOPING.md)
 
 ## If you're working on a bioinformatics project and would be interested in some consulting help check out our website at https://genomiverse.net/ !

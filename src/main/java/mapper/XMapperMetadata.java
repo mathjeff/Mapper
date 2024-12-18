@@ -9,37 +9,37 @@ import java.util.Properties;
 import java.lang.management.ManagementFactory;
 
 // Returns metadata about Mapper
-public class MapperMetadata {
+public class XMapperMetadata {
 
-  // The version of Mapper that is running
+  // The version of X-Mapper that is running
   public static String getVersion() {
     Properties properties = new Properties();
     try {
-      properties.load(MapperMetadata.class.getResourceAsStream("/mapper.properties"));
+      properties.load(XMapperMetadata.class.getResourceAsStream("/x-mapper.properties"));
     } catch (IOException e) {
-      throw new RuntimeException("Failed to get Mapper version", e);
+      throw new RuntimeException("Failed to get X-Mapper version", e);
     }
-    String version = properties.getProperty("mapper.version", "unknown");
+    String version = properties.getProperty("xmapper.version", "unknown");
     return version;
   }
 
-  // A guess of the command line used to run Mapper
+  // A guess of the command line used to run X-Mapper
   // This might not get the correct filepath for java
-  // This might not get exactly the correct filepath of the Mapper jar
+  // This might not get exactly the correct filepath of the X-Mapper jar
   public static String guessCommandLine() {
     String javaArgumentsString = String.join(" ", getJavaArguments());
-    Path mapperJarPath = getMapperPath();
+    Path mapperJarPath = getXMapperPath();
     Path workingDirPath = new File(".").toPath();
 
-    Path simplifiedMapperPath = simplifyPath(mapperJarPath, workingDirPath);
+    Path simplifiedXMapperPath = simplifyPath(mapperJarPath, workingDirPath);
 
     String mainArgumentsString = String.join(" ", getMainArguments());
-    return "java " + javaArgumentsString + " -jar " + simplifiedMapperPath + " " + mainArgumentsString;
+    return "java " + javaArgumentsString + " -jar " + simplifiedXMapperPath + " " + mainArgumentsString;
   }
 
-  private static Path getMapperPath() {
+  private static Path getXMapperPath() {
     try {
-      File mapperJar = new File(MapperMetadata.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+      File mapperJar = new File(XMapperMetadata.class.getProtectionDomain().getCodeSource().getLocation().toURI());
       return mapperJar.toPath();
     } catch (URISyntaxException e) {
       throw new RuntimeException(e);
