@@ -1,13 +1,15 @@
-X-Mapper: a fast, accurate aligner for genomic sequences
+# X-Mapper: a fast, accurate aligner for genomic sequences
 
 Download the latest release version here: https://github.com/mathjeff/Mapper/releases/download/1.1.0-beta13/x-mapper-1.1.0-beta13.jar
 
 Read about the algorithm, plus benchmarking and application in the publication here: https://genomebiology.biomedcentral.com/articles/10.1186/s13059-024-03473-7
 
+If you already have aligned sequences and just want to identify genetic variants, see [QuickVariants](https://github.com/caozhichongchong/QuickVariants).
+
 Contact:\
  Dr. Anni Zhang, MIT, anniz44@mit.edu
 
-Usage:
+## Usage:
   java -jar x-mapper.jar [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --queries <queries.fastq> [options]
 
   java -jar x-mapper.jar [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --paired-queries [--spacing <expected> <distancePerPenalty>]<queries.fastq> <queries2.fastq> [options]
@@ -122,4 +124,4 @@ Usage:
 
 To make changes to X-Mapper, see [DEVELOPING.md](DEVELOPING.md)
 
-## If you're working on a bioinformatics project and would be interested in some consulting help check out our website at https://genomiverse.net/ !
+## If you're working on a bioinformatics project and would be interested in some consulting help, check out our website at https://genomiverse.net/ !
