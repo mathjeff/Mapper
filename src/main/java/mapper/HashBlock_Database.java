@@ -1,5 +1,9 @@
 package mapper;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.ArrayDeque;
 import java.util.HashMap;
@@ -8,31 +12,34 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 // A HashBlock_Database is a collection of HashBlock objects.
 // If two HashBlocks have the same text, they are considered equal.
 public class HashBlock_Database implements ReferenceProvider {
   public HashBlock_Database(SequenceDatabase sequences) {
-    this.initialize(sequences, -1, -1, -1, true, new StatusLogger(new Logger(new PrintWriter()), 0));
+    this.initialize(sequences, -1, -1, -1, true, null, new StatusLogger(new Logger(new mapper.PrintWriter()), 0));
   }
 
   public HashBlock_Database(SequenceDatabase sequences, StatusLogger statusLogger) {
-    this.initialize(sequences, -1, -1, -1, true, statusLogger);
+    this.initialize(sequences, -1, -1, -1, true, null, statusLogger);
   }
 
-  public HashBlock_Database(SequenceDatabase sequences, int minInterestingSize, int hintMaxInterestingSize, int maxNumShortMatches, boolean enableGapmers, StatusLogger statusLogger) {
-    this.initialize(sequences, minInterestingSize, hintMaxInterestingSize, maxNumShortMatches, enableGapmers, statusLogger);
+  public HashBlock_Database(SequenceDatabase sequences, int minInterestingSize, int hintMaxInterestingSize, int maxNumShortMatches, boolean enableGapmers, DirCache dirCache, StatusLogger statusLogger) {
+    this.initialize(sequences, minInterestingSize, hintMaxInterestingSize, maxNumShortMatches, enableGapmers, dirCache, statusLogger);
   }
 
-  private void initialize(SequenceDatabase sequences, int minInterestingSize, int hintMaxInterestingSize, int maxNumShortMatches, boolean enableGapmers, StatusLogger statusLogger) {
+  private void initialize(SequenceDatabase sequences, int minInterestingSize, int hintMaxInterestingSize, int maxNumShortMatches, boolean enableGapmers, DirCache dirCache, StatusLogger statusLogger) {
+    this.logger = statusLogger.getLogger();
     this.statusLogger = statusLogger;
     this.enableGapmers = enableGapmers;
     for (Sequence sequence : sequences.getAll()) {
       this.addSequence(sequence);
     }
     this.sequenceDatabase = sequences;
-    System.err.println("total reference size: " + this.totalForwardSize * 2);
+    if (this.logger.getEnabled())
+      this.logger.log("total reference size: " + this.totalForwardSize * 2);
     if (minInterestingSize < 0) {
       this.minInterestingSize = (int)Math.max((Math.log(this.totalForwardSize + 1) / Math.log(4)) - 2, 0);
     } else {
@@ -70,7 +77,31 @@ public class HashBlock_Database implements ReferenceProvider {
     } else {
       this.maxNumShortMatches = maxNumShortMatches;
     }
+    this.cacheDir = this.chooseCacheDir(dirCache);
     this.chooseNextHashSize(0);
+  }
+
+  // choose a directory to save this database into
+  private File chooseCacheDir(DirCache dirCache) {
+    if (dirCache == null)
+      return null;
+    try {
+      TreeMap<String, String> keys = this.getCacheKeys();
+      return dirCache.getOrCreateDir(keys);
+    } catch (IOException e) {
+      // If we're supposed to choose a cache directory and we can't, that's a fatal error
+      throw new RuntimeException(e);
+    }
+  }
+
+  public TreeMap<String, String> getCacheKeys() {
+    TreeMap<String, String> keys = new TreeMap<String, String>(this.sequenceDatabase.getCacheKeys());
+    keys.put("enableGapmers", "" + this.enableGapmers);
+    keys.put("minInterestingSize", "" + this.minInterestingSize);
+    keys.put("maxNumShortMatches", "" + this.maxNumShortMatches);
+    keys.put("formatVersion", "1");
+    keys.put("type", "HashBlock_Database");
+    return keys;
   }
 
   public HashBlock_Database get_HashBlock_database(Logger logger) {
@@ -109,7 +140,6 @@ public class HashBlock_Database implements ReferenceProvider {
     while (true) {
       synchronized(this) {
         if (this.maxFullySetUpSize >= size) {
-          // Done
           return;
         }
         if (maxFullySetUpSize >= this.maxInterestingSize) {
@@ -146,21 +176,119 @@ public class HashBlock_Database implements ReferenceProvider {
       // we haven't hashed anything yet
       if (this.maxInterestingSize < 0) {
         // don't have a default max interesting size yet
-        int initialSize = (int)(Math.log((double)this.totalForwardSize) / Math.log(4.0) * 4);
+        int initialSize = DuplicationDetector.chooseMaxDuplicationLength(this.sequenceDatabase);
         this.maxInterestingSize = Math.max(initialSize, requestSize);
       }
     } else {
       this.maxInterestingSize = requestSize * 2;
     }
-    System.err.println("hashing lengths " + (this.maxFullySetUpSize + 1) + " - " + this.maxInterestingSize);
-    this.sequencesLeftToHash = new ArrayDeque<Sequence>(this.sequenceDatabase.getForwardSequencesOnly());
+    if (this.logger.getEnabled())
+      this.logger.log("hashing lengths " + (this.maxFullySetUpSize + 1) + " - " + this.maxInterestingSize);
+    this.lengthsLeftToLoad = new ArrayDeque<Integer>();
+    if (this.cacheDir != null) {
+      this.minNonloadableLength = this.maxInterestingSize + 1;
+
+      for (int i = Math.max(this.minInterestingSize, this.maxFullySetUpSize + 1); i <= this.maxInterestingSize; i++) {
+        File cacheFile = this.chooseMapCacheFile(i);
+        if (cacheFile.exists()) {
+          // If the cache file exists we can try to load it
+          this.lengthsLeftToLoad.add(i);
+        } else {
+          this.minNonloadableLength = i;
+          // If the cache file doesn't exist, there's no point in trying to load it and outputting an error
+          break;
+        }
+      }
+    }
     this.cumulativeHashedSize = 0;
+    // Also list the sequences that we will need to hash if loading from the cache isn't sufficient
+    this.sequencesLeftToHash = new ArrayDeque<Sequence>(this.sequenceDatabase.getForwardSequencesOnly());
   }
 
   // called by a thread to contribute to setting up
   public void helpSetUp() {
+    this.helpLoad();
     this.helpHash();
     this.helpPack();
+  }
+
+  // helps load the reference from cache and waits until done loading
+  private void helpLoad() {
+    if (this.cacheDir == null) {
+      return;
+    }
+
+    while (true) {
+      boolean sleep = false;
+      synchronized(this) {
+        if (this.lengthsLeftToLoad.size() < 1) {
+          if (this.numActiveLoaders < 1) {
+            return; // done loading
+          } else {
+            // still waiting for some other workers
+            sleep = true;
+          }
+        }
+      }
+      if (sleep) {
+        try {
+          Thread.sleep(1);
+        } catch (InterruptedException e) {
+        }
+      }
+      helpLoadOnce();
+    }
+  }
+
+  private void helpLoadOnce() {
+    int numBasepairsUsed;
+    synchronized(this) {
+      if (this.lengthsLeftToLoad.size() < 1) {
+        return;
+      }
+      numBasepairsUsed = this.lengthsLeftToLoad.remove();
+      this.numActiveLoaders++;
+    }
+
+    File cacheFile = chooseMapCacheFile(numBasepairsUsed);
+    PackedMap map = null;
+    try {
+      map = new PackedMap(cacheFile, this.sequenceDatabase);
+    } catch (Exception e) {
+      if (this.logger.getEnabled()) {
+        StringWriter stringWriter = new StringWriter();
+        PrintWriter printWriter = new java.io.PrintWriter(stringWriter);
+        e.printStackTrace(printWriter);
+        this.logger.log("Could not load map from " + cacheFile + ": " + stringWriter.toString());
+      }
+      this.minNonloadableLength = Math.min(this.minNonloadableLength, numBasepairsUsed);
+    }
+    synchronized(this) {
+      this.numActiveLoaders--;
+      // save this map
+      while (this.hashedBlocks.size() <= numBasepairsUsed)
+        this.hashedBlocks.add(null);
+      this.hashedBlocks.set(numBasepairsUsed, map);
+      if (this.numActiveLoaders < 1 && this.lengthsLeftToLoad.size() < 1) {
+        // Done trying to load
+        // Clear any maps starting from the first failure, if any
+        for (int i = this.minNonloadableLength; i < this.hashedBlocks.size(); i++) {
+          this.hashedBlocks.set(i, null);
+        }
+
+        if (this.minNonloadableLength > this.minInterestingSize) {
+          this.statusLogger.log("HashBlock_Database loaded lengths through " + (this.minNonloadableLength - 1) + " from " + this.cacheDir, true);
+        } else {
+          this.statusLogger.log("HashBlock_Database loaded no cache entries from " + this.cacheDir, true);
+        }
+        if (this.minNonloadableLength > this.maxInterestingSize) {
+          // We loaded each PackedMap and don't need to re-hash any sequences
+          this.sequencesLeftToHash = new ArrayDeque<Sequence>();
+        }
+        // Record that we don't need to rehash any lengths that we loaded successfully
+        this.maxFullySetUpSize = Math.max(this.maxFullySetUpSize, this.minNonloadableLength - 1);
+      }
+    }
   }
 
   // helps hash the reference and waits until done hashing
@@ -216,12 +344,12 @@ public class HashBlock_Database implements ReferenceProvider {
         for (int i = 0; i <= size; i++) {
           PackedMap row = this.hashedBlocks.get(i);
           if (row == null) {
-            row = new PackedMap(1, 1, this.sequenceDatabase);
+            row = new PackedMap(1, 1, this.sequenceDatabase, i);
             this.hashedBlocks.set(i, row);
           }
         }
         this.statusLogger.log("Hashed reference through size " + this.maxInterestingSize, true);
-        for (int i = this.maxFullySetUpSize + 1; i < size; i++) {
+        for (int i = this.maxFullySetUpSize + 1; i <= size; i++) {
           PackedMap map = this.hashedBlocks.get(i);
           if (map != null)
             this.mapsLeftToPack.add(map);
@@ -251,6 +379,13 @@ public class HashBlock_Database implements ReferenceProvider {
       this.numActivePackers++;
     }
     map.pack();
+    try {
+      this.exportMap(map);
+    } catch (IOException e) {
+      // If we're supposed to save the map but we can't, then we just report a failure
+      throw new RuntimeException(e);
+    }
+    // Maybe dump to cache here too
     synchronized(this) {
       this.numActivePackers--;
       if (mapsLeftToPack.size() < 1 && this.numActivePackers < 1) {
@@ -262,14 +397,32 @@ public class HashBlock_Database implements ReferenceProvider {
           PackedMap row = this.hashedBlocks.get(i);
           cumulativeCapacity += row.getCapacity();
           if (row.getCapacity() > 1) {
-            System.err.println("Hashed length " + i + " into " + row.getCapacity() + " bins, saturated " + row.getNumOverfilledKeys() + " bins (cumulative capacity " + cumulativeCapacity + ") (num items added here " + row.getNumItemsAdded() + ") in " + row.getTotalAddMillis() + "ms");
+            if (this.logger.getEnabled())
+              this.logger.log("Hashed length " + i + " into " + row.getCapacity() + " bins, saturated " + row.getNumOverfilledKeys() + " bins (cumulative capacity " + cumulativeCapacity + ") (num items added here " + row.getNumItemsAdded() + ") in " + row.getTotalAddMillis() + "ms");
           }
         }
 
         this.maxFullySetUpSize = this.maxInterestingSize;
         this.statusLogger.log("Processed reference through size " + this.maxFullySetUpSize, true);
+        if (this.cacheDir != null) {
+          if (this.logger.getEnabled()) {
+            this.logger.log("HashBlock_Database saved to " + this.cacheDir);
+          }
+        }
       }
     }
+  }
+
+  private void exportMap(PackedMap map) throws IOException {
+    if (this.cacheDir == null)
+      return;
+    int numBasepairsUsed = map.getId();
+    File destFile = chooseMapCacheFile(numBasepairsUsed);
+    map.writeTo(destFile);
+  }
+
+  private File chooseMapCacheFile(int numBasepairsUsed) {
+    return new File(this.cacheDir, "length-" + numBasepairsUsed);
   }
 
   private void hashSequenceThroughSize(Sequence sequence, int size) {
@@ -353,7 +506,7 @@ public class HashBlock_Database implements ReferenceProvider {
           }
           if (maxNumInterestingMatches < 1)
             maxNumInterestingMatches = 1;
-          blocksOfThisSize = new PackedMap(maxNumInterestingMatches, estimatedCapacity, this.sequenceDatabase);
+          blocksOfThisSize = new PackedMap(maxNumInterestingMatches, estimatedCapacity, this.sequenceDatabase, key1);
           while (this.hashedBlocks.size() <= key1)
             this.hashedBlocks.add(null);
           this.hashedBlocks.set(key1, blocksOfThisSize);
@@ -471,10 +624,15 @@ public class HashBlock_Database implements ReferenceProvider {
 
   long totalForwardSize;
   SequenceDatabase sequenceDatabase;
+  Queue<Integer> lengthsLeftToLoad = new ArrayDeque<Integer>();
   Queue<Sequence> sequencesLeftToHash = new ArrayDeque<Sequence>();
   Queue<PackedMap> mapsLeftToPack = new ArrayDeque<PackedMap>();
+  int numActiveLoaders;
   int numActiveHashers;
   int numActivePackers;
+  int minNonloadableLength;
+  Logger logger;
+  File cacheDir;
   StatusLogger statusLogger;
   long cumulativeHashedSize;
   boolean enableGapmers = true;

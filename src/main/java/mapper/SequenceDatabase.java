@@ -1,10 +1,12 @@
 package mapper;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeSet;
 
 public class SequenceDatabase {
   public SequenceDatabase(Collection<Sequence> sequences) {
@@ -263,10 +265,51 @@ public class SequenceDatabase {
     return reverseComplement;
   }
 
+  public Map<String, String> getCacheKeys() {
+    Map<String, String> keys = new HashMap<String, String>();
+    keys.put("numSequences", "" + this.sequences.size());
+    keys.put("totalSize", "" + totalForwardSize);
+    keys.put("firstSequenceName", this.sequences.get(0).getName());
+    keys.put("paths", this.getPathsString());
+    if (this.ancestral)
+      keys.put("ancestral", "true");
+    return keys;
+  }
+
+  public void setAncestral() {
+    this.ancestral = true;
+  }
+
+  private String getPathsString() {
+    TreeSet<String> paths = new TreeSet<String>();
+    for (Sequence sequence: sequences) {
+      String path = sequence.getPath();
+      if (path != null) {
+        paths.add(path);
+      }
+    }
+    StringBuilder builder = new StringBuilder();
+    builder.append("{");
+    boolean first = true;
+    for (String path: paths) {
+      if (first) {
+        first = false;
+      } else {
+        builder.append(",");
+      }
+      File file = new File(path);
+      String name = file.getName();
+      builder.append(file.getName() + ":" + file.lastModified());
+    }
+    builder.append("}");
+    return builder.toString();
+  }
+
   private List<Sequence> sequences = new ArrayList<Sequence>();
   private long totalForwardSize;
   private long totalForwardAndReverseSize;
   int numBitsPerPosition;
   long maxEncodableValue;
   private long[] sequenceEncodingStarts; // Map<Id, encoding start>
+  private boolean ancestral;
 }

@@ -96,19 +96,19 @@ public class AncestryDetector_Test {
     referenceSequences.add(reference);
     referenceSequences.add(reference.reverseComplement());
     SequenceDatabase referenceDatabase = new SequenceDatabase(referenceSequences);
-    StatusLogger statusLogger = new StatusLogger(new Logger(new PrintWriter()), 0);
+    Logger logger = new Logger(new PrintWriter());
+    StatusLogger statusLogger = new StatusLogger(logger, 0);
     HashBlock_Database hashblockDatabase = new HashBlock_Database(referenceDatabase);
 
     int minDuplicationLength = DuplicationDetector.chooseMinDuplicationLength(referenceDatabase);
     int maxDuplicationLength = DuplicationDetector.chooseMaxDuplicationLength(referenceDatabase);
-    DuplicationDetector duplicationDetector = new DuplicationDetector(hashblockDatabase, minDuplicationLength, maxDuplicationLength, 3, 0, statusLogger);
+    DuplicationDetector duplicationDetector = new DuplicationDetector(hashblockDatabase, minDuplicationLength, maxDuplicationLength, 3, 0, null, statusLogger);
 
     double dissimilarityThreshold = 0.3;
     referenceSequences.add(reference);
     AncestryDetector ancestryDetector = new AncestryDetector(duplicationDetector, referenceSequences, dissimilarityThreshold, statusLogger);
     ancestryDetector.setVerifyNoDuplicateAnalyses();
 
-    Logger logger = new Logger(new PrintWriter());
     SequenceDatabase inferredAncestors = ancestryDetector.unionRecentAncestors(logger).getSequenceDatabase();
     List<Sequence> inferredAncestorList = new ArrayList<Sequence>();
     for (int i = 0; i < inferredAncestors.getNumSequences(); i++) {

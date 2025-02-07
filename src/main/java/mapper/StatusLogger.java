@@ -13,12 +13,18 @@ public class StatusLogger {
 
   // If no message was received recently or if this message is important, then this method will log it
   public void log(String message, boolean important) {
-    long now = System.currentTimeMillis();
-    if (now - lastLoggedAt > 1000 || important) {
-      this.lastLoggedAt = now;
-      double elapsedSeconds = (now - this.startMillis) / 1000.0;
-      this.logger.log(message + " at " + elapsedSeconds + "s");
+    if (this.logger.getEnabled()) {
+      long now = System.currentTimeMillis();
+      if (now - lastLoggedAt > 1000 || important) {
+        this.lastLoggedAt = now;
+        double elapsedSeconds = (now - this.startMillis) / 1000.0;
+          this.logger.log(message + " at " + elapsedSeconds + "s");
+      }
     }
+  }
+
+  public Logger getLogger() {
+    return this.logger;
   }
 
   Logger logger;

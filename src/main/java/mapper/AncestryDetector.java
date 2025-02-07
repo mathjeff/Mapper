@@ -110,7 +110,9 @@ public class AncestryDetector implements ReferenceProvider {
           }
         }
         SequenceDatabase sequenceDatabase = new SequenceDatabase(forwardOverrides, true);
-        this.result = new HashBlock_Database(sequenceDatabase, -1, -1, -1, this.resultingDatabaseEnableGapmers, this.statusLogger);
+        // Inform the SequenceDatabase that it came from an AncestryDetector in case anything tries to cache it in the future
+        sequenceDatabase.setAncestral();
+        this.result = new HashBlock_Database(sequenceDatabase, -1, -1, -1, this.resultingDatabaseEnableGapmers, null, this.statusLogger);
         this.considerSavingDatabase(sequenceDatabase);
         System.err.println("AncestryDetector done");
       }

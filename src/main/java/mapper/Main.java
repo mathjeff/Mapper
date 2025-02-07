@@ -42,6 +42,7 @@ public class Main {
     // parse arguments
     List<String> referencePaths = new ArrayList<String>();
     List<QueryProvider> queries = new ArrayList<QueryProvider>();
+    File cacheDir = null;
     String outVcfPath = null;
     String outSamPath = null;
     String outUnalignedPath = null;
@@ -112,6 +113,11 @@ public class Main {
 
         QueryProvider queryBuilder = new PairedEndQueryProvider(lefts, rights, expectedDistanceBetweenPairedSequences, spacingDeviationPerUnitPenalty);
         queries.add(queryBuilder);
+        continue;
+      }
+      if ("--cache-dir".equals(arg)) {
+        cacheDir = new File(args[i + 1]);
+        i++;
         continue;
       }
       if ("--split-queries-past-size".equals(arg)) {
@@ -340,7 +346,7 @@ public class Main {
     for (QueryProvider queryBuilder : queries) {
       System.err.println(queryBuilder.toString());
     }
-    boolean successful = run(referencePaths, queries, outVcfPath, vcfIncludeNonMutations, outSamPath, outRefsMapCountPath, outUnalignedPath, parameters, numThreads, queryEndFraction, autoVerbose, guessReferenceAncestors, outAncestorPath, enableGapmers, startMillis);
+    boolean successful = run(referencePaths, queries, cacheDir, outVcfPath, vcfIncludeNonMutations, outSamPath, outRefsMapCountPath, outUnalignedPath, parameters, numThreads, queryEndFraction, autoVerbose, guessReferenceAncestors, outAncestorPath, enableGapmers, startMillis);
     if (successful)
       System.exit(0);
     else
@@ -461,7 +467,11 @@ public class Main {
 "\n" +
 "        java -Xms200m -Xmx4g -jar x-mapper.jar <other x-mapper arguments>\n" +
 "\n" +
-"    --num-threads <count> number of threads to use at once for processing. Higher values will run more quickly on a system that has that many CPUs available.\n"
+"    --num-threads <count> number of threads to use at once for processing. Higher values will run more quickly on a system that has that many CPUs available.\n" +
+"\n" +
+"    --cache-dir <dir> save and load analyses from this directory to save time.\n" +
+"      Currently what we save here is most of our analyses of the reference genomes (information relating to --infer-ancestors is not currently saved).\n" +
+"      You may specify the same <dir> for multiple executions; data is actually stored in an appropriate subdirectory.\n"
 );
 
     System.err.println(message);
@@ -469,7 +479,13 @@ public class Main {
   }
 
   // performs alignment and outputs results
-  public static boolean run(List<String> referencePaths, List<QueryProvider> queriesList, String outVcfPath, boolean vcfIncludeNonMutations, String outSamPath, String outRefsMapCountPath, String outUnalignedPath, AlignmentParameters parameters, int numThreads, double queryEndFraction, boolean autoVerbose, boolean guessReferenceAncestors, String outAncestorPath, boolean enableGapmers, long startMillis) throws IllegalArgumentException, FileNotFoundException, IOException, InterruptedException {
+  public static boolean run(List<String> referencePaths, List<QueryProvider> queriesList, File cacheDir, String outVcfPath, boolean vcfIncludeNonMutations, String outSamPath, String outRefsMapCountPath, String outUnalignedPath, AlignmentParameters parameters, int numThreads, double queryEndFraction, boolean autoVerbose, boolean guessReferenceAncestors, String outAncestorPath, boolean enableGapmers, long startMillis) throws IllegalArgumentException, FileNotFoundException, IOException, InterruptedException {
+    DirCache dirCache;
+    if (cacheDir != null)
+      dirCache = new DirCache(cacheDir, new StorageFilesystem());
+    else
+      dirCache = null;
+
     VcfWriter writer = null;
     if (outVcfPath != null)
       writer = new VcfWriter(outVcfPath, vcfIncludeNonMutations, queryEndFraction);
@@ -486,21 +502,22 @@ public class Main {
     // The main purpose of the DuplicationDetector is to detect regions of the genome that have more duplication than normal, so we increase the maximum number of short matches that its HashBlock_Database is willing to provide
     // This shouldn't be very slow because we don't run the DuplicationDetector very many times, unlike aligning queries
     int duplicationDetector_maxNumShortMatches = 8;
-    StatusLogger statusLogger = new StatusLogger(new Logger(new PrintWriter()), startMillis);
+    Logger logger = new Logger(new PrintWriter());
+    StatusLogger statusLogger = new StatusLogger(logger, startMillis);
 
     if (guessReferenceAncestors) {
-      HashBlock_Database originalReference_database = new HashBlock_Database(originalReference, minDuplicationLength, maxDuplicationLength, duplicationDetector_maxNumShortMatches, enableGapmers, statusLogger);
-      DuplicationDetector ancestryDuplicationDetector = new DuplicationDetector(originalReference_database, minDuplicationLength, maxDuplicationLength, 3, 1, statusLogger);
+      HashBlock_Database originalReference_database = new HashBlock_Database(originalReference, minDuplicationLength, maxDuplicationLength, duplicationDetector_maxNumShortMatches, enableGapmers, dirCache, statusLogger);
+      DuplicationDetector ancestryDuplicationDetector = new DuplicationDetector(originalReference_database, minDuplicationLength, maxDuplicationLength, 3, 1, dirCache, statusLogger);
       double dissimilarityThreshold = parameters.MaxErrorRate / parameters.MutationPenalty;
       referenceProvider = new AncestryDetector(ancestryDuplicationDetector, sortedReference, dissimilarityThreshold, statusLogger).setOutputPath(outAncestorPath).setResultingDatabaseEnableGapmers(enableGapmers);
 
     } else {
-      referenceProvider = new HashBlock_Database(originalReference, -1, maxDuplicationLength, -1, enableGapmers, statusLogger);
+      referenceProvider = new HashBlock_Database(originalReference, -1, maxDuplicationLength, -1, enableGapmers, dirCache, statusLogger);
     }
 
     // We store some approximate duplication locations to help us determine which parts of the reference might be unique
     int duplicationWindowLength = 1000;
-    DuplicationDetector approximateDuplicationDetector = new DuplicationDetector(referenceProvider, minDuplicationLength, maxDuplicationLength, 2, duplicationWindowLength, statusLogger);
+    DuplicationDetector approximateDuplicationDetector = new DuplicationDetector(referenceProvider, minDuplicationLength, maxDuplicationLength, 2, duplicationWindowLength, dirCache, statusLogger);
 
     long now = System.currentTimeMillis();
     long elapsed = (now - startMillis) / 1000;
@@ -650,6 +667,12 @@ public class Main {
       System.err.println(" Time waiting for workers      : " + statistics.millisWaitingForWorkers + "ms");
       if (statistics.containsLongRead) {
         System.err.println("\n Not optimized for long reads. You might be interested in --split-queries-past-size.");
+      }
+      if (cacheDir == null) {
+        if (guessReferenceAncestors)
+          System.err.println("\n Add --cache-dir <dir> to cache some analysis of the reference genome");
+        else
+          System.err.println("\n Add --cache-dir <dir> to cache the analysis of the reference genome");
       }
 
     }

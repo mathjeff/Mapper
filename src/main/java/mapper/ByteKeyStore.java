@@ -1,5 +1,6 @@
 package mapper;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -46,7 +47,7 @@ class ByteKeyStore {
       // The pending adds are getting long so let's process them now
       this.processPendingAdds();
     }
- }
+  }
 
   public BytesView get(int key) {
     // process pending adds so the data will be where we expect it to be
@@ -144,6 +145,36 @@ class ByteKeyStore {
   // resolves any workin progress to reduce the memory usage as much as possible
   public void pack() {
     this.processPendingAdds();
+  }
+
+  public void writeTo(Serializer serializer) throws IOException {
+    serializer.writeProperty("countPerKey", "" + this.maxCountPerKey);
+    serializer.writeProperty("bitsPerValue", "" + this.numBitsPerValue);
+
+    byte[] shortBytes = this.shortsToBytes(this.cumulativeShortCounts);
+    serializer.writeBytesAndLength(shortBytes);
+
+    byte[] intBytes = this.intsToBytes(this.cumulativeIntCounts);
+    serializer.writeBytesAndLength(intBytes);
+
+    serializer.writeBytesAndLength(this.values);
+    serializer.writeString("\n");
+  }
+
+  public void readFrom(Deserializer deserializer) throws IOException {
+    this.maxCountPerKey = deserializer.readIntProperty("countPerKey");
+    this.numBitsPerValue = deserializer.readIntProperty("bitsPerValue");
+
+    byte[] shortBytes = deserializer.readLengthPrefixedByteArray();
+    this.cumulativeShortCounts = this.bytesToShorts(shortBytes);
+
+    byte[] intBytes = deserializer.readLengthPrefixedByteArray();
+    this.cumulativeIntCounts = this.bytesToInts(intBytes);
+
+    this.values = deserializer.readLengthPrefixedByteArray();
+    deserializer.readText("\n");
+
+    this.pendingAdds = null;
   }
 
   private boolean knowsAllProcessedMatches(int key) {
@@ -583,6 +614,84 @@ class ByteKeyStore {
       }
     }
     return 0;
+  }
+
+  private byte[] shortsToBytes(short[] shorts) {
+    if (shorts == null)
+      return null;
+    byte[] result = new byte[shorts.length * 2];
+    int writeIndex = 0;
+    for (int i = 0; i < shorts.length; i++) {
+      short valueHere = shorts[i];
+      result[writeIndex] = (byte)(valueHere & 255);
+      writeIndex++;
+      valueHere = (short)(valueHere >> 8);
+      result[writeIndex] = (byte)(valueHere);
+      writeIndex++;
+    }
+    return result;
+  }
+  private short[] bytesToShorts(byte[] bytes) {
+    if (bytes.length == 0)
+      return null;
+    short[] result = new short[bytes.length / 2];
+    for (int i = 0; i < result.length; i++) {
+      short value = 0;
+      value += (short)byteToInt(bytes[i * 2]);
+      value += (short)byteToInt(bytes[i * 2 + 1]) << 8;
+      result[i] = value;
+    }
+    return result;
+  }
+
+  private byte[] intsToBytes(int[] ints) {
+    if (ints == null)
+      return null;
+    byte[] result = new byte[ints.length * 4];
+    int writeIndex = 0;
+    for (int i = 0; i < ints.length; i++) {
+      int valueHere = ints[i];
+      result[writeIndex + 3] = (byte)(valueHere & 255);
+      valueHere = valueHere >> 8;
+      result[writeIndex + 2] = (byte)(valueHere & 255);
+      valueHere = valueHere >> 8;
+      result[writeIndex + 1] = (byte)(valueHere & 255);
+      valueHere = valueHere >> 8;
+      result[writeIndex] = (byte)(valueHere & 255);
+      writeIndex += 4;
+    }
+    return result;
+  }
+
+  private int[] bytesToInts(byte[] bytes) {
+    if (bytes.length == 0)
+      return null;
+
+    int[] result = new int[bytes.length / 4];
+    int readIndex = 0;
+    for (int i = 0; i < result.length; i++) {
+      int value = 0;
+      value += byteToInt(bytes[readIndex]);
+      value = value << 8;
+      readIndex++;
+      value += byteToInt(bytes[readIndex]);
+      value = value << 8;
+      readIndex++;
+      value += byteToInt(bytes[readIndex]);
+      value = value << 8;
+      readIndex++;
+      value += byteToInt(bytes[readIndex]);
+      readIndex++;
+
+      result[i] = value;
+    }
+    return result;
+  }
+
+  private int byteToInt(byte b) {
+    if (b < 0)
+      return (int)b + 256;
+    return b;
   }
 
   int maxCountPerKey;

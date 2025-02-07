@@ -16,7 +16,7 @@ public class PackedMap_Test {
     Sequence firstSequence = sequences.get(0);
     SequenceDatabase sequenceDatabase = new SequenceDatabase(sequences, true);
     int keyCapacity = 10;
-    PackedMap packedMap = new PackedMap(5, keyCapacity, sequenceDatabase);
+    PackedMap packedMap = new PackedMap(5, keyCapacity, sequenceDatabase, 1);
     List<HashBlock> blocks = new ArrayList<HashBlock>();
     for (int i = 0; i < keyCapacity * 2; i++) {
       int forwardHash = i % keyCapacity;

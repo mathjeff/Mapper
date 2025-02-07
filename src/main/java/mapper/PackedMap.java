@@ -1,5 +1,9 @@
 package mapper;
 
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -12,29 +16,37 @@ class PackedMap {
   private static SequencePosition[] emptyList = new SequencePosition[0];
   private static int keysPerStore = 256;
 
-  public PackedMap(int maxInterestingCountPerKey, int keyCapacity, SequenceDatabase sequenceDatabase) {
+  public PackedMap(int maxInterestingCountPerKey, int keyCapacity, SequenceDatabase sequenceDatabase, int id) {
     if (keyCapacity < 1)
       keyCapacity = 1;
-
-    // It is possible that all of our values will be stored in the same array
-    // We limit our maximum number of items stored per key to be no more than what we can be sure will fit in the array
-    int numBytesPerPositionReference = sequenceDatabase.getEncodedLength(1);
-    int numBitsPerPositionReference = sequenceDatabase.getNumBitsPerPosition();
     long maxArrayLength = Integer.MAX_VALUE / 2;
     if ((long)keyCapacity > maxArrayLength) {
       keyCapacity = (int)maxArrayLength;
     }
-
     this.maxInterestingCountPerKey = maxInterestingCountPerKey;
     this.keyCapacity = keyCapacity;
+    this.sequenceDatabase = sequenceDatabase;
+    this.id = id;
+
+    this.allocateStores();
+  }
+
+  public PackedMap(File fromCacheFile, SequenceDatabase sequenceDatabase) throws IOException {
+    this.sequenceDatabase = sequenceDatabase;
+    this.readFrom(fromCacheFile);
+  }
+
+  private void allocateStores() {
+    // It is possible that all of our values will be stored in the same array
+    // We limit our maximum number of items stored per key to be no more than what we can be sure will fit in the array
+    int numBytesPerPositionReference = sequenceDatabase.getEncodedLength(1);
+    int numBitsPerPositionReference = sequenceDatabase.getNumBitsPerPosition();
+
     int maxInterestingBytesPerKey = sequenceDatabase.getEncodedLength(maxInterestingCountPerKey);
     this.stores = new ByteKeyStore[(keyCapacity + keysPerStore - 1) / keysPerStore];
-
     for (int i = 0; i < stores.length; i++) {
       this.stores[i] = new ByteKeyStore(keysPerStore, maxInterestingBytesPerKey, numBitsPerPositionReference);
     }
-
-    this.sequenceDatabase = sequenceDatabase;
   }
 
   // Adds the given hashblocks to this map
@@ -196,7 +208,7 @@ class PackedMap {
   }
 
   private int getPackedKey(int originalKey) {
-    int result = originalKey % this.getCapacity();
+    int result = originalKey % getCapacity();
     if (result < 0)
       result += this.getCapacity();
     return result;
@@ -230,6 +242,42 @@ class PackedMap {
     }
   }
 
+  public int getId() {
+    return this.id;
+  }
+
+  public void writeTo(File file) throws IOException {
+    Serializer serializer = new Serializer(file);
+    serializer.writeProperty("type", "PackedMap");
+    serializer.writeProperty("keyCapacity", "" + this.keyCapacity);
+    serializer.writeProperty("numItems", "" + this.numItemsAdded);
+    serializer.writeProperty("maxCountPerKey", "" + this.maxInterestingCountPerKey);
+    serializer.writeProperty("basepairs", "" + this.id);
+    serializer.writeProperty("numStores", "" + this.stores.length);
+    serializer.writeString("stores:");
+    for (int i = 0; i < stores.length; i++) {
+      stores[i].writeTo(serializer);
+    }
+    serializer.close();
+  }
+
+
+  public void readFrom(File file) throws IOException {
+    Deserializer deserializer = new Deserializer(file);
+    deserializer.readText("type:PackedMap,");
+    this.keyCapacity = deserializer.readIntProperty("keyCapacity");
+    this.numItemsAdded = deserializer.readIntProperty("numItems");
+    this.maxInterestingCountPerKey = deserializer.readIntProperty("maxCountPerKey");
+    this.id = deserializer.readIntProperty("basepairs");
+    int numStores = deserializer.readIntProperty("numStores");
+    deserializer.readText("stores:");
+    this.allocateStores();
+    for (int i = 0; i < this.stores.length; i++) {
+      this.stores[i].readFrom(deserializer);
+    }
+    deserializer.close();
+  }
+
   ByteKeyStore[] stores;
   int keyCapacity;
 
@@ -237,6 +285,7 @@ class PackedMap {
   long numItemsAdded;
   int maxInterestingCountPerKey;
   long totalAddMillis;
+  int id;
 
   List<PackJob> pendingAdds = new ArrayList<PackJob>();
   boolean activelyAdding = false;

@@ -675,37 +675,19 @@ public class AlignerWorker_Test {
 
   private List<QueryAlignment> align(String queryText, String referenceText) {
     Sequence querySequence = new SequenceBuilder().setName("query").add(queryText).build();
-    return this.align(querySequence, referenceText);
+    return align(querySequence, referenceText);
   }
 
   private List<QueryAlignment> align(Sequence querySequence, String referenceText) {
-    return this.align(new Query(querySequence), referenceText);
+    return align(new Query(querySequence), referenceText);
   }
 
   private List<QueryAlignment> align(Query query, String referenceText) {
     return align(query, referenceText, makeParameters());
   }
+
   private List<QueryAlignment> align(Query query, String referenceText, AlignmentParameters parameters) {
-    long startMillis = System.currentTimeMillis();
-    Sequence reference = new SequenceBuilder().setName("reference").add(referenceText).build();
-    List<Sequence> references = new ArrayList<Sequence>();
-    references.add(reference);
-    references.add(reference.reverseComplement());
-    SequenceDatabase refSequences = new SequenceDatabase(references);
-    Logger logger = new Logger(new PrintWriter());
-    StatusLogger statusLogger = new StatusLogger(logger, startMillis);
-    HashBlock_Database hashblockDatabase = new HashBlock_Database(refSequences, statusLogger);
-    List<AlignmentListener> alignmentListeners = new ArrayList<AlignmentListener>();
-    AlignmentCache resultsCache = new AlignmentCache();
-
-    int minDuplicationLength = DuplicationDetector.chooseMinDuplicationLength(refSequences);
-    int maxDuplicationLength = DuplicationDetector.chooseMaxDuplicationLength(refSequences);
-    DuplicationDetector duplicationDetector = new DuplicationDetector(hashblockDatabase, minDuplicationLength, maxDuplicationLength, 2, 1, statusLogger);
-
-    AlignerWorker worker = new AlignerWorker(hashblockDatabase, parameters, duplicationDetector.getView(logger), 0, alignmentListeners, resultsCache, new ArrayDeque<AlignerWorker>());
-    worker.setup();
-    worker.setLogger(logger);
-    return worker.align(query).getAlignmentsForQuery(query);
+    return Api.alignOnce(query, referenceText, parameters, new Logger(new PrintWriter()));
   }
 
   private void verifyOneAlignment(List<QueryAlignment> alignments) {

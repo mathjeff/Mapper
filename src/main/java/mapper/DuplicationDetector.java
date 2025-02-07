@@ -1,5 +1,7 @@
 package mapper;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -32,11 +34,12 @@ public class DuplicationDetector {
     return chooseMinDuplicationLength(sequenceDatabase) * 2;
   }
 
-  public DuplicationDetector(ReferenceProvider hashblockDatabaseProvider, int minDuplicationLength, int maxDuplicationLength, int minNumInterestingCopies, int windowSize, StatusLogger statusLogger) {
-    this.setup(hashblockDatabaseProvider, minDuplicationLength, maxDuplicationLength, minNumInterestingCopies, windowSize, statusLogger);
+  public DuplicationDetector(ReferenceProvider hashblockDatabaseProvider, int minDuplicationLength, int maxDuplicationLength, int minNumInterestingCopies, int windowSize, DirCache dirCache, StatusLogger statusLogger) {
+    this.setup(hashblockDatabaseProvider, minDuplicationLength, maxDuplicationLength, minNumInterestingCopies, windowSize, dirCache, statusLogger);
   }
 
-  private void setup(ReferenceProvider hashblockDatabaseProvider, int minDuplicationLength, int maxDuplicationLength, int minNumInterestingCopies, int windowSize, StatusLogger statusLogger) {
+  private void setup(ReferenceProvider hashblockDatabaseProvider, int minDuplicationLength, int maxDuplicationLength, int minNumInterestingCopies, int windowSize, DirCache dirCache, StatusLogger statusLogger) {
+    this.dirCache = dirCache;
     this.hashblockDatabaseProvider = hashblockDatabaseProvider;
     this.enableGapmers = hashblockDatabaseProvider.getEnableGapmers();
     this.minSizeToProcess = minDuplicationLength;
@@ -111,80 +114,101 @@ public class DuplicationDetector {
     return -1;
   }
 
-  private Readable_HashBlock_Database getHashblockDatabase(Logger logger) {
-    Readable_HashBlock_Database database = this.hashblockDatabaseProvider.get_HashBlock_database(logger).getView();
+  private Readable_HashBlock_Database get_ReadableHashblockDatabase(Logger logger) {
+    Readable_HashBlock_Database database = this.getHashblockDatabase(logger).getView();
     // Ensure a consistent hashed length even if we visit block lengths out of order
     database.ensureHashed(this.minSizeToProcess + 1);
     return database;
   }
 
+  private HashBlock_Database getHashblockDatabase(Logger logger) {
+    return this.hashblockDatabaseProvider.get_HashBlock_database(logger);
+  }
+
   private void process(int blockLength, Logger logger) {
     this.statusLogger.log("DuplicationDetector starting to process length " + blockLength, false);
-    Readable_HashBlock_Database hashblockDatabase = this.getHashblockDatabase(logger);
+    HashBlock_Database hashblockDatabase = this.getHashblockDatabase(logger);
+    Readable_HashBlock_Database readableHashblockDatabase = this.get_ReadableHashblockDatabase(logger);
+    SequenceDatabase sequenceDatabase = hashblockDatabase.getSequenceDatabase();
 
-    // visit blocks of this size
-    int numBlocks = hashblockDatabase.getNumHashKeys(blockLength);
-    Map<Sequence, TreeMap<Integer, Duplication>> blocks = new HashMap<Sequence, TreeMap<Integer, Duplication>>();
-    for (int hashcode = 0; hashcode < numBlocks; hashcode++) {
-      if (hashcode % 1000 == 0) {
-        this.statusLogger.log("DuplicationDetector starting to process hashcode " + hashcode + " / " + numBlocks + " for length " + blockLength, false);
+    // Try to load from cache
+    boolean loadedFromCache = false;
+    File cacheDir = null;
+    try {
+      cacheDir = this.getCacheDir(hashblockDatabase);
+    } catch (IOException e) {
+      // If we were told to use the cache and can't, that's a fatal error
+      throw new RuntimeException("DuplicationDetector cannot get cache dir", e);
+    }
+    if (cacheDir != null) {
+      File cacheFile = this.getCacheFile(cacheDir, blockLength);
+      if (cacheFile.exists()) {
+        Map<Sequence, TreeMap<Integer, Duplication>> blocks = new HashMap<Sequence, TreeMap<Integer, Duplication>>();
+        try {
+          List<Duplication> duplications = this.readFromCache(cacheFile, blockLength, sequenceDatabase);
+          // for each group, save it at the locations of each of its elements
+          groupDuplicationsBySequence(duplications, blocks);
+          saveDuplications(blocks);
+          loadedFromCache = true;
+         } catch (Exception e) {
+           // Add the filepath to the exception
+           throw new RuntimeException("Could not load duplications from " + cacheFile, e);
+         }
       }
-      SequencePosition[] matches = hashblockDatabase.lookupByForwardHash(blockLength, hashcode);
-      if (matches == null) {
-        // we have too many copies of this hashblock so we didn't save any of them
-        continue;
-      }
-      // Check that this group might be big enough to be interesting.
-      // When we do a lookup using the forward hash, we get the forward and reverse complement copy of each hashblock
-      // So, the number of unique positions is half of that
-      // It is possible that a hashblock is its own reverse complement, however, there aren't any cases at the moment where we're interested in that kind of duplication
-      int numForwardMatches = matches.length / 2;
-      if (numForwardMatches >= this.minNumInterestingCopies) {
-        // group these blocks by part of their text to avoid hash collisions
-        Map<String, Duplication> positionsByText = new HashMap<String, Duplication>();
-        for (int i = 0; i < matches.length; i++) {
-          SequencePosition position = matches[i];
-          // We use just the edges of the block so we can still allow some mutations within a gapmer
-          int prefixLength = (blockLength + 3) / 4;
-          String prefix = position.getSequence().getRange(position.getStartIndex(), prefixLength);
-          String suffix = position.getSequence().getRange(position.getStartIndex() + blockLength - prefixLength, prefixLength);
-          String text = prefix + suffix;
-          // ambiguous alleles could be reported via several different hashcodes, so for now we don't support detecting duplicate blocks containing ambiguous alleles
-          if (!Basepairs.isAmbiguous(text)) {
-            Duplication matchingPositions = positionsByText.get(text);
-            if (matchingPositions == null) {
-              matchingPositions = new Duplication(blockLength);
-              positionsByText.put(text, matchingPositions);
-            }
-            matchingPositions.addPosition(position);
-          }
+    }
+   
+    if (!loadedFromCache) { 
+      this.cacheIncomplete = true; // we have new data to write to the cache
+      // visit blocks of this size
+      int numBlocks = readableHashblockDatabase.getNumHashKeys(blockLength);
+      Map<Sequence, TreeMap<Integer, Duplication>> blocks = new HashMap<Sequence, TreeMap<Integer, Duplication>>();
+      for (int hashcode = 0; hashcode < numBlocks; hashcode++) {
+        if (hashcode % 1000 == 0) {
+          this.statusLogger.log("DuplicationDetector starting to process hashcode " + hashcode + " / " + numBlocks + " for length " + blockLength, false);
         }
-        // for each group, remove any positions that are listed twice
-        for (Duplication group: positionsByText.values()) {
-          group.removeDuplicatePositions();
+        SequencePosition[] matches = readableHashblockDatabase.lookupByForwardHash(blockLength, hashcode);
+        if (matches == null) {
+          // we have too many copies of this hashblock so we didn't save any of them
+          continue;
         }
-        // for each group, save it at the locations of each of its elements
-        for (Duplication group: positionsByText.values()) {
-          if (group.getNumInstances() >= this.minNumInterestingCopies) {
-            for (SequencePosition position: group.getStartPositions()) {
-              // associate this group with this position
-              Sequence sequence = position.getSequence();
-              TreeMap<Integer, Duplication> blocksOnThisSequence = blocks.get(sequence);
-              if (blocksOnThisSequence == null) {
-                blocksOnThisSequence = new TreeMap<Integer, Duplication>();
-                blocks.put(sequence, blocksOnThisSequence);
+        // Check that this group might be big enough to be interesting.
+        // When we do a lookup using the forward hash, we get the forward and reverse complement copy of each hashblock
+        // So, the number of unique positions is half of that
+        // It is possible that a hashblock is its own reverse complement, however, there aren't any cases at the moment where we're interested in that kind of duplication
+        int numForwardMatches = matches.length / 2;
+        if (numForwardMatches >= this.minNumInterestingCopies) {
+          // group these blocks by part of their text to avoid hash collisions
+          Map<String, Duplication> positionsByText = new HashMap<String, Duplication>();
+          for (int i = 0; i < matches.length; i++) {
+            SequencePosition position = matches[i];
+            // We use just the edges of the block so we can still allow some mutations within a gapmer
+            int prefixLength = (blockLength + 3) / 4;
+            String prefix = position.getSequence().getRange(position.getStartIndex(), prefixLength);
+            String suffix = position.getSequence().getRange(position.getStartIndex() + blockLength - prefixLength, prefixLength);
+            String text = prefix + suffix;
+            // ambiguous alleles could be reported via several different hashcodes, so for now we don't support detecting duplicate blocks containing ambiguous alleles
+            if (!Basepairs.isAmbiguous(text)) {
+              Duplication matchingPositions = positionsByText.get(text);
+              if (matchingPositions == null) {
+                matchingPositions = new Duplication(blockLength);
+                positionsByText.put(text, matchingPositions);
               }
-              int startIndex = position.getStartIndex();
-              blocksOnThisSequence.put(startIndex, group);
+              matchingPositions.addPosition(position);
             }
           }
+          // for each group, remove any positions that are listed twice
+          for (Duplication group: positionsByText.values()) {
+            group.removeDuplicatePositions();
+          }
+          // for each group, save it at the locations of each of its elements
+          groupDuplicationsBySequence(positionsByText.values(), blocks);
         }
-      }
-
-      // periodically copy results from blocks into this.duplicationsBySequence
-      if (hashcode % 10000 == 9999 || hashcode == numBlocks - 1) {
-        saveDuplications(blocks);
-        blocks = new HashMap<Sequence, TreeMap<Integer, Duplication>>();
+  
+        // periodically copy results from blocks into this.duplicationsBySequence
+        if (hashcode % 10000 == 9999 || hashcode == numBlocks - 1) {
+          saveDuplications(blocks);
+          blocks = new HashMap<Sequence, TreeMap<Integer, Duplication>>();
+        }
       }
     }
 
@@ -192,6 +216,14 @@ public class DuplicationDetector {
     synchronized(this) {
       this.numUncompleteJobs--;
       if (this.numUncompleteJobs < 1) {
+        // save to cache
+        // TODO: format the duplications in parallel
+        boolean savedToCache = false;
+        if (cacheDir != null && this.cacheIncomplete) {
+          this.saveToCache(cacheDir, sequenceDatabase);
+          savedToCache = true;
+        }
+
         // don't need the HashBlock_Database anymore
         this.hashblockDatabaseProvider = null;
 
@@ -203,11 +235,97 @@ public class DuplicationDetector {
               entry.setValue(null);
             }
           }
+          this.allDuplications = null;
         }
 
-        System.err.println("DuplicationDetector done detecting duplications (through length " + this.maxSizeToProcess + ")");
+        if (savedToCache) {
+          this.statusLogger.log("DuplicationDetector done detecting duplications (through length " + this.maxSizeToProcess + ")", true);
+        } else {
+          // Nothing was saved to the cache so we only loaded from the cache
+          this.statusLogger.log("DuplicationDetector done loading duplications (through length " + this.maxSizeToProcess + ")", true);
+        }
       }
     }
+  }
+
+  private void groupDuplicationsBySequence(Iterable<Duplication> duplications, Map<Sequence, TreeMap<Integer, Duplication>> blocks) {
+    // for each group, save it at the locations of each of its elements
+    for (Duplication group: duplications) {
+      if (group.getNumInstances() >= this.minNumInterestingCopies) {
+        for (SequencePosition position: group.getStartPositions()) {
+          // associate this group with this position
+          Sequence sequence = position.getSequence();
+          TreeMap<Integer, Duplication> blocksOnThisSequence = blocks.get(sequence);
+          if (blocksOnThisSequence == null) {
+            blocksOnThisSequence = new TreeMap<Integer, Duplication>();
+            blocks.put(sequence, blocksOnThisSequence);
+          }
+          int startIndex = position.getStartIndex();
+          blocksOnThisSequence.put(startIndex, group);
+        }
+      }
+    }
+  }
+
+  private List<Set<Duplication>> getDuplicationsByLength() {
+    List<Set<Duplication>> duplicationsByLength = new ArrayList<Set<Duplication>>();
+    for (int i = 0; i <= this.maxSizeToProcess; i++) {
+      duplicationsByLength.add(new HashSet<Duplication>());
+    }
+
+    for (TreeMap<Integer, Duplication> duplicationsHere: this.duplicationsBySequence.values()) {
+      for (Duplication duplication: duplicationsHere.values()) {
+        int length = duplication.getLength();
+        duplicationsByLength.get(length).add(duplication);
+      }
+    }
+    return duplicationsByLength;
+  }
+
+  private void saveToCache(File cacheDir, SequenceDatabase sequenceDatabase) {
+    this.statusLogger.log("DuplicationDetector saving to cache", true);
+    try {
+      List<Set<Duplication>> duplicationsByLength = getDuplicationsByLength();
+      for (int length = this.minSizeToProcess; length <= this.maxSizeToProcess; length++) {
+        Set<Duplication> duplicationsWithThisLength = duplicationsByLength.get(length);
+        File cacheFile = getCacheFile(cacheDir, length);
+        this.writeToCache(duplicationsWithThisLength, cacheFile, sequenceDatabase);
+      }
+    } catch (IOException e) {
+      // If we were told to save to a cache directory and can't, that's a fatal error
+      throw new RuntimeException("DuplicationDetector could not save to cache dir " + cacheDir, e);
+    }
+    this.statusLogger.log("DuplicationDetector saved to cache " + cacheDir, true);
+  }
+
+  private void writeToCache(Set<Duplication> duplications, File cacheFile, SequenceDatabase sequenceDatabase) throws IOException {
+    Serializer serializer = new Serializer(cacheFile);
+    serializer.writeProperty("numDuplications", "" + duplications.size());
+    for (Duplication duplication: duplications) {
+      serializer.writeString("" + duplication.getNumInstances() + ":");
+      for (SequencePosition position: duplication.getStartPositions()) {
+        long encodedPosition = sequenceDatabase.encodePosition(position.getSequence(), position.getStartIndex());
+        serializer.writeString("" + encodedPosition + ",");
+      }
+    }
+    serializer.close();
+  }
+
+  private List<Duplication> readFromCache(File cacheFile, int duplicationLength, SequenceDatabase sequenceDatabase) throws IOException {
+    Deserializer deserializer = new Deserializer(cacheFile);
+    int numDuplications = deserializer.readIntProperty("numDuplications");
+    List<Duplication> duplications = new ArrayList<Duplication>();
+    for (int i = 0; i < numDuplications; i++) {
+      int numInstances = Integer.parseInt(deserializer.readUntil(':'));
+      Duplication duplication = new Duplication(duplicationLength);
+      for (int j = 0; j < numInstances; j++) {
+        long encodedPosition = Long.parseLong(deserializer.readUntil(','));
+        SequencePosition position = sequenceDatabase.decodePosition(encodedPosition);
+        duplication.addPosition(position);
+      }
+      duplications.add(duplication);
+    }
+    return duplications;
   }
 
   private void saveDuplications(Map<Sequence, TreeMap<Integer, Duplication>> blocks) {
@@ -326,6 +444,29 @@ public class DuplicationDetector {
     }
   }
 
+  private File getCacheDir(HashBlock_Database database) throws IOException {
+    if (this.dirCache == null) {
+      // We aren't supposed to use a cache directory
+      return null;
+    }
+    if (this.cacheDir == null) {
+      // We haven't yet computed a cache directory
+      TreeMap<String, String> keys = new TreeMap<String, String>(database.getCacheKeys());
+      keys.put("minSizeToProcess", "" + this.minSizeToProcess);
+      keys.put("maxSizeToProcess", "" + this.maxSizeToProcess);
+      keys.put("windowSize", "" + this.windowSize);
+      keys.put("minNumInterestingCopies", "" + this.minNumInterestingCopies);
+      keys.put("type", "DuplicationDetector");
+
+      this.cacheDir = dirCache.getOrCreateDir(keys);
+    }
+    return this.cacheDir;
+  }
+
+  private File getCacheFile(File cacheDir, int duplicationLength) {
+    return new File(cacheDir, "length-" + duplicationLength);
+  }
+
   ReferenceProvider hashblockDatabaseProvider;
   boolean enableGapmers;
   Readable_DuplicationDetector detected;
@@ -337,5 +478,8 @@ public class DuplicationDetector {
   int numUncompleteJobs;
   int minNumInterestingCopies;
   int windowSize; // We group duplications into windows of this size and only keep the min and max in each window
+  DirCache dirCache;
+  File cacheDir;
   StatusLogger statusLogger;
+  boolean cacheIncomplete = false;
 }
