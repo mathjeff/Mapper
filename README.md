@@ -1,6 +1,6 @@
 # X-Mapper: a fast, accurate aligner for genomic sequences
 
-Download the latest release version here: https://github.com/mathjeff/Mapper/releases/download/1.1.0-beta13/x-mapper-1.1.0-beta13.jar
+Download the latest release version here: https://github.com/mathjeff/Mapper/releases/download/1.2.0-beta01/x-mapper-1.2.0-beta01.jar
 
 Read about the algorithm, plus benchmarking and application in the publication here: https://genomebiology.biomedcentral.com/articles/10.1186/s13059-024-03473-7
 
@@ -121,6 +121,10 @@ Contact:\
         java -Xms200m -Xmx4g -jar x-mapper.jar <other x-mapper arguments>
 
     --num-threads <count> number of threads to use at once for processing. Higher values will run more quickly on a system that has that many CPUs available.
+
+    --cache-dir <dir> save and load analyses from this directory to save time.
+      Currently what we save here is most of our analyses of the reference genomes (information relating to --infer-ancestors is not currently saved).
+      You may specify the same <dir> for multiple executions; data is actually stored in an appropriate subdirectory.
 
 To make changes to X-Mapper, see [DEVELOPING.md](DEVELOPING.md)
 
