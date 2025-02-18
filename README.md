@@ -1,6 +1,6 @@
 # X-Mapper: a fast, accurate aligner for genomic sequences
 
-Download the latest release version here: https://github.com/mathjeff/Mapper/releases/download/1.2.0-beta01/x-mapper-1.2.0-beta01.jar
+Download the latest release version here: https://github.com/mathjeff/Mapper/releases/download/1.2.0-beta02/x-mapper-1.2.0-beta02.jar
 
 Read about the algorithm, plus benchmarking and application in the publication here: https://genomebiology.biomedcentral.com/articles/10.1186/s13059-024-03473-7
 
