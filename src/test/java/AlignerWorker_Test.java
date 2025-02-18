@@ -687,7 +687,7 @@ public class AlignerWorker_Test {
   }
 
   private List<QueryAlignment> align(Query query, String referenceText, AlignmentParameters parameters) {
-    return Api.alignOnce(query, referenceText, parameters, new Logger(new PrintWriter()));
+    return Api.alignOnce(query, referenceText, parameters, new Logger(new StderrWriter()));
   }
 
   private void verifyOneAlignment(List<QueryAlignment> alignments) {

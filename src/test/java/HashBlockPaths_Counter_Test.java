@@ -61,7 +61,7 @@ public class HashBlockPaths_Counter_Test {
   }
 
   private List<QueryMatch> getMatches(String refText, String seq1Text, String seq2Text) {
-    Logger logger = new Logger(new PrintWriter());
+    Logger logger = new Logger(new StderrWriter());
     Sequence query1 = new SequenceBuilder().setName("seq1").add(seq1Text).build();
     seq2Text = reverseComplement(seq2Text);
     Sequence query2 = new SequenceBuilder().setName("seq2").add(seq2Text).build();
@@ -84,7 +84,7 @@ public class HashBlockPaths_Counter_Test {
   }
 
   private Counting_HashBlockPath makePath(Sequence query, SequenceDatabase sequenceDatabase, String name) {
-    Logger logger = new Logger(new PrintWriter());
+    Logger logger = new Logger(new StderrWriter());
     StatusLogger statusLogger = new StatusLogger(logger, 0);
     HashBlock_Pyramid queryPyramid = new HashBlock_Pyramid(new HashBlock_Stream(query, false, null));
     HashBlock_Database database = new HashBlock_Database(sequenceDatabase, statusLogger);

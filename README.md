@@ -51,6 +51,7 @@ Contact:\
 
       --out-vcf <file> output file to generate containing a description of mutation counts by position
       --vcf-exclude-non-mutations if set, the output vcf file will exclude positions where no mutations were detected
+      --vcf-omit-support-reads By default, the vcf file has a column showing one or more supporting reads for each variant. If set, the output vcf file will hide the supporting reads for each variant.
       --distinguish-query-ends <fraction> (default 0.1) In the output vcf file, we separately display which queries aligned at each position with <fraction> of the end of the query and which didn't.
 
     Summary by genome

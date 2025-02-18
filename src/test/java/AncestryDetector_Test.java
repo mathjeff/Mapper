@@ -96,7 +96,7 @@ public class AncestryDetector_Test {
     referenceSequences.add(reference);
     referenceSequences.add(reference.reverseComplement());
     SequenceDatabase referenceDatabase = new SequenceDatabase(referenceSequences);
-    Logger logger = new Logger(new PrintWriter());
+    Logger logger = new Logger(new StderrWriter());
     StatusLogger statusLogger = new StatusLogger(logger, 0);
     HashBlock_Database hashblockDatabase = new HashBlock_Database(referenceDatabase);
 

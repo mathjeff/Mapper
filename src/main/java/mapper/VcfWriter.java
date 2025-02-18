@@ -12,18 +12,22 @@ import java.util.TreeMap;
 
 // A VcfWriter writes .vcf files
 public class VcfWriter {
-  public VcfWriter(String path, boolean includeNonMutations, double queryEndFraction) throws FileNotFoundException, IOException {
+  public VcfWriter(String path, boolean includeNonMutations, double queryEndFraction, boolean showSupportRead) throws FileNotFoundException, IOException {
     File file = new File(path);
     this.fileStream = new FileOutputStream(file);
     this.bufferedStream = new BufferedOutputStream(fileStream);
     this.includeNonMutations = includeNonMutations;
+    this.showSupportRead = showSupportRead;
   }
   public void write(Map<Sequence, Alignments> alignments, int numParallelJobs) throws IOException {
     this.writeText("##fileType=\"Vcf summary of variants\"\n");
     this.writeText("\n");
     this.writeText("##commandLine=\"" + XMapperMetadata.guessCommandLine() + "\"\n");
     this.writeText("\n");
-    this.writeText("#CHROM\tPOS\tREF\tALT\tDP\tDETAILS-MIDDLE\tDETAILS-ENDS\tSUPPORT\n");
+    if (this.showSupportRead) {
+      this.writeText("#CHROM\tPOS\tREF\tALT\tDP\tDETAILS-MIDDLE\tDETAILS-ENDS\tSUPPORT\n");
+    }
+    this.writeText("#CHROM\tPOS\tREF\tALT\tDP\tDETAILS-MIDDLE\tDETAILS-ENDS\n");
 
     List<VcfFormatRequest> jobs = this.splitJobs(alignments, numParallelJobs);
     int waitIndex = 0; // index of next worker to wait for
@@ -83,7 +87,7 @@ public class VcfWriter {
   }
 
   private VcfFormatterWorker requestFormat(VcfFormatRequest formatRequest) {
-    VcfFormatterWorker worker = new VcfFormatterWorker(this.includeNonMutations);
+    VcfFormatterWorker worker = new VcfFormatterWorker(this.includeNonMutations, this.showSupportRead);
     worker.request(formatRequest);
     worker.start();
     return worker;
@@ -105,4 +109,5 @@ public class VcfWriter {
   long numReferencePositionsMatched;
   long numReferencePositions;
   boolean includeNonMutations;
+  boolean showSupportRead;
 }

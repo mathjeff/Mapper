@@ -56,7 +56,7 @@ public class HashBlockAligner_Test {
     Sequence b = new SequenceBuilder().setName("b").add(textB).build();
     SequenceMatch match = new SequenceMatch(a, b, 0);
     HashBlock_Aligner aligner = new HashBlock_Aligner(new StraightAligner(new PathAligner_Runner()));
-    aligner.setLogger(new Logger(new PrintWriter()));
+    aligner.setLogger(new Logger(new StderrWriter()));
     AlignmentAnalysis analysis = new AlignmentAnalysis();
     analysis.maxInsertionExtensionPenalty = expectedPenalty;
     analysis.maxDeletionExtensionPenalty = expectedPenalty;

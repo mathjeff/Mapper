@@ -48,7 +48,7 @@ public class Counting_HashBlockPath_Test {
     Sequence query = new SequenceBuilder().setName("query").add(queryText).build();
     Sequence reference = new SequenceBuilder().setName("reference").add(referenceText).build();
     SequenceDatabase sequenceDatabase = new SequenceDatabase(reference, true);
-    Logger logger = new Logger(new PrintWriter());
+    Logger logger = new Logger(new StderrWriter());
     HashBlock_Pyramid queryPyramid = new HashBlock_Pyramid(new HashBlock_Stream(query, false, null));
     HashBlock_Database database = new HashBlock_Database(sequenceDatabase);
     AlignmentParameters parameters = new AlignmentParameters();

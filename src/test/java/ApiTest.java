@@ -10,4 +10,12 @@ public class ApiTest {
     Sequence querySequence = new SequenceBuilder().setName("query").add("ACGT").build();
     Api.alignOnce(new Query(querySequence), "ACGT", new AlignmentParameters(), Logger.NoOpLogger);
   }
+
+  @Test
+  public void testReusingDatabase() {
+    String genome = "AACGTCGT";
+    ReferenceDatabase referenceDatabase = Api.newDatabase(genome, Logger.NoOpLogger);
+    Api.align("AACG", referenceDatabase, new AlignmentParameters(), Logger.NoOpLogger);
+    Api.align("ACGT", referenceDatabase, new AlignmentParameters(), Logger.NoOpLogger);
+  }
 }

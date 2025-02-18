@@ -1,7 +1,7 @@
 package mapper;
 
-public class PrintWriter implements TextWriter {
-  public PrintWriter() {
+public class StderrWriter implements TextWriter {
+  public StderrWriter() {
   }
 
   public void write(String message) {

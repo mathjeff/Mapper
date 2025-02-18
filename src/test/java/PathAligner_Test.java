@@ -26,7 +26,7 @@ public class PathAligner_Test {
     Sequence b = new SequenceBuilder().setName("b").add(textB).build();
     SequenceMatch match = new SequenceMatch(a, b, 0);
 
-    PathAligner aligner = new PathAligner(new Logger(new PrintWriter()));
+    PathAligner aligner = new PathAligner(new Logger(new StderrWriter()));
     AlignmentAnalysis analysis = new AlignmentAnalysis();
     analysis.maxInsertionExtensionPenalty = expectedPenalty;
     analysis.maxDeletionExtensionPenalty = expectedPenalty;

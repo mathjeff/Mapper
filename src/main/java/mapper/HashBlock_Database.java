@@ -19,7 +19,7 @@ import java.util.TreeSet;
 // If two HashBlocks have the same text, they are considered equal.
 public class HashBlock_Database implements ReferenceProvider {
   public HashBlock_Database(SequenceDatabase sequences) {
-    this.initialize(sequences, -1, -1, -1, true, null, new StatusLogger(new Logger(new mapper.PrintWriter()), 0));
+    this.initialize(sequences, -1, -1, -1, true, null, new StatusLogger(new Logger(new mapper.StderrWriter()), 0));
   }
 
   public HashBlock_Database(SequenceDatabase sequences, StatusLogger statusLogger) {
@@ -257,7 +257,7 @@ public class HashBlock_Database implements ReferenceProvider {
     } catch (Exception e) {
       if (this.logger.getEnabled()) {
         StringWriter stringWriter = new StringWriter();
-        PrintWriter printWriter = new java.io.PrintWriter(stringWriter);
+        PrintWriter printWriter = new PrintWriter(stringWriter);
         e.printStackTrace(printWriter);
         this.logger.log("Could not load map from " + cacheFile + ": " + stringWriter.toString());
       }

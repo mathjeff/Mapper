@@ -49,6 +49,7 @@ public class Main {
     String outAncestorPath = null;
     boolean enableGapmers = true;
     boolean vcfIncludeNonMutations = true;
+    boolean vcfShowSupportRead = true;
     String outRefsMapCountPath = null;
     int alignmentVerbosity = 0;
     int referenceVerbosity = 0;
@@ -258,6 +259,11 @@ public class Main {
         vcfIncludeNonMutations = false;
         continue;
       }
+
+      if ("--vcf-omit-support-reads".equals(arg)) {
+        vcfShowSupportRead = false;
+        continue;
+      }
       if ("--infer-ancestors".equals(arg)) {
         guessReferenceAncestors = true;
         continue;
@@ -283,8 +289,8 @@ public class Main {
     if (outVcfPath == null && outSamPath == null && outRefsMapCountPath == null && outUnalignedPath == null && !allowNoOutput) {
       usageError("No output specified. Try --out-vcf <output path>, or if you really don't want to generate an output file, --no-output");
     }
-    alignmentLogger = new Logger(new PrintWriter(), 1, alignmentVerbosity);
-    referenceLogger = new Logger(new PrintWriter(), 1, referenceVerbosity);
+    alignmentLogger = new Logger(new StderrWriter(), 1, alignmentVerbosity);
+    referenceLogger = new Logger(new StderrWriter(), 1, referenceVerbosity);
     if (maxErrorRate >= 0 && mutationPenalty >= 0 && hasPairedQueriesWithoutSpecifyingSpacing) {
       usageError("Customized alignment penalties (--snp-penalty) and penalty threshold (--max-penalty) without customizing spacing penalty between paired-end queries (--paired-queries <queries> <queries2> --spacing <expected> <distancePerPenalty>).\n Please specify --spacing explicitly.\n If you really don't want to change the default spacing penalty, you can specify --spacing " + defaultExpectedDistanceBetweenPairedSequences + " " + defaultSpacingDeviationPerUnitPenalty);
     }
@@ -346,7 +352,7 @@ public class Main {
     for (QueryProvider queryBuilder : queries) {
       System.err.println(queryBuilder.toString());
     }
-    boolean successful = run(referencePaths, queries, cacheDir, outVcfPath, vcfIncludeNonMutations, outSamPath, outRefsMapCountPath, outUnalignedPath, parameters, numThreads, queryEndFraction, autoVerbose, guessReferenceAncestors, outAncestorPath, enableGapmers, startMillis);
+    boolean successful = run(referencePaths, queries, cacheDir, outVcfPath, vcfIncludeNonMutations, vcfShowSupportRead, outSamPath, outRefsMapCountPath, outUnalignedPath, parameters, numThreads, queryEndFraction, autoVerbose, guessReferenceAncestors, outAncestorPath, enableGapmers, startMillis);
     if (successful)
       System.exit(0);
     else
@@ -479,7 +485,7 @@ public class Main {
   }
 
   // performs alignment and outputs results
-  public static boolean run(List<String> referencePaths, List<QueryProvider> queriesList, File cacheDir, String outVcfPath, boolean vcfIncludeNonMutations, String outSamPath, String outRefsMapCountPath, String outUnalignedPath, AlignmentParameters parameters, int numThreads, double queryEndFraction, boolean autoVerbose, boolean guessReferenceAncestors, String outAncestorPath, boolean enableGapmers, long startMillis) throws IllegalArgumentException, FileNotFoundException, IOException, InterruptedException {
+  public static boolean run(List<String> referencePaths, List<QueryProvider> queriesList, File cacheDir, String outVcfPath, boolean vcfIncludeNonMutations, boolean vcfShowSupportRead, String outSamPath, String outRefsMapCountPath, String outUnalignedPath, AlignmentParameters parameters, int numThreads, double queryEndFraction, boolean autoVerbose, boolean guessReferenceAncestors, String outAncestorPath, boolean enableGapmers, long startMillis) throws IllegalArgumentException, FileNotFoundException, IOException, InterruptedException {
     DirCache dirCache;
     if (cacheDir != null)
       dirCache = new DirCache(cacheDir, new StorageFilesystem());
@@ -488,7 +494,7 @@ public class Main {
 
     VcfWriter writer = null;
     if (outVcfPath != null)
-      writer = new VcfWriter(outVcfPath, vcfIncludeNonMutations, queryEndFraction);
+      writer = new VcfWriter(outVcfPath, vcfIncludeNonMutations, queryEndFraction, vcfShowSupportRead);
 
     System.err.println("Loading reference");
     boolean keepQualityData = (outUnalignedPath != null);
@@ -502,7 +508,7 @@ public class Main {
     // The main purpose of the DuplicationDetector is to detect regions of the genome that have more duplication than normal, so we increase the maximum number of short matches that its HashBlock_Database is willing to provide
     // This shouldn't be very slow because we don't run the DuplicationDetector very many times, unlike aligning queries
     int duplicationDetector_maxNumShortMatches = 8;
-    Logger logger = new Logger(new PrintWriter());
+    Logger logger = new Logger(new StderrWriter());
     StatusLogger statusLogger = new StatusLogger(logger, startMillis);
 
     if (guessReferenceAncestors) {
