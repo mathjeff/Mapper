@@ -1,6 +1,6 @@
 # X-Mapper: a fast, accurate aligner for genomic sequences
 
-Download the latest release version here: https://github.com/mathjeff/Mapper/releases/download/1.2.0-beta02/x-mapper-1.2.0-beta02.jar
+Download the latest release version here: https://github.com/mathjeff/Mapper/releases/download/1.2.0-beta03/x-mapper-1.2.0-beta03.jar
 
 Read about the algorithm, plus benchmarking and application in the publication here: https://genomebiology.biomedcentral.com/articles/10.1186/s13059-024-03473-7
 
@@ -44,6 +44,9 @@ Contact:\
       By default, these pieces contain noncontiguous basepairs and might look like XXXXXXXX____XXXX.
       This flag makes these pieces be contiguous instead to look more like XXXXXXXXXXXX.
       THIS OPTION IS A TEMPORARY EXPERIMENT FOR TESTING THE PERFORMANCE OF GAPMERS.
+
+    --allow-duplicate-contig-names if multiple contigs have the same name, continue instead of throwing an error.
+      This can be confusing but shouldn't cause any incorrect results.
 
   OUTPUT FORMATS:
 
