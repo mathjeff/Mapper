@@ -40,8 +40,8 @@ public class HashBlock_Database implements ReferenceProvider {
     this.sequenceDatabase = sequences;
     if (this.logger.getEnabled())
       this.logger.log("total reference size: " + this.totalForwardSize * 2);
-    if (minInterestingSize < 0) {
-      this.minInterestingSize = (int)Math.max((Math.log(this.totalForwardSize + 1) / Math.log(4)) - 2, 0);
+    if (minInterestingSize <= 0) {
+      this.minInterestingSize = (int)Math.max((Math.log(this.totalForwardSize + 1) / Math.log(4)) - 2, 1);
     } else {
       this.minInterestingSize = minInterestingSize;
     }
@@ -99,7 +99,7 @@ public class HashBlock_Database implements ReferenceProvider {
     keys.put("enableGapmers", "" + this.enableGapmers);
     keys.put("minInterestingSize", "" + this.minInterestingSize);
     keys.put("maxNumShortMatches", "" + this.maxNumShortMatches);
-    keys.put("formatVersion", "1");
+    keys.put("formatVersion", "2");
     keys.put("type", "HashBlock_Database");
     return keys;
   }
@@ -393,10 +393,10 @@ public class HashBlock_Database implements ReferenceProvider {
         int cumulativeCapacity = 0;
         while (this.maxInterestingSize >= this.hashedBlocks.size())
           this.hashedBlocks.add(null);
-        for (int i = 0; i <= this.maxInterestingSize; i++) {
+        for (int i = this.minInterestingSize; i <= this.maxInterestingSize; i++) {
           PackedMap row = this.hashedBlocks.get(i);
           cumulativeCapacity += row.getCapacity();
-          if (row.getCapacity() > 1) {
+          if (row.getCapacity() > 0) {
             if (this.logger.getEnabled())
               this.logger.log("Hashed length " + i + " into " + row.getCapacity() + " bins, saturated " + row.getNumOverfilledKeys() + " bins (cumulative capacity " + cumulativeCapacity + ") (num items added here " + row.getNumItemsAdded() + ") in " + row.getTotalAddMillis() + "ms");
           }

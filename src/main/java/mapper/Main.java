@@ -54,6 +54,7 @@ public class Main {
     int alignmentVerbosity = 0;
     int referenceVerbosity = 0;
     boolean allowNoOutput = false;
+    boolean allowDuplicateContigNames = false;
     boolean autoVerbose = false;
     boolean guessReferenceAncestors = false;
 
@@ -160,6 +161,10 @@ public class Main {
       }
       if ("--no-output".equals(arg)) {
         allowNoOutput = true;
+        continue;
+      }
+      if ("--allow-duplicate-contig-names".equals(arg)) {
+        allowDuplicateContigNames = true;
         continue;
       }
       if ("--verbose".equals(arg) || "-v".equals(arg)) {
@@ -352,7 +357,7 @@ public class Main {
     for (QueryProvider queryBuilder : queries) {
       System.err.println(queryBuilder.toString());
     }
-    boolean successful = run(referencePaths, queries, cacheDir, outVcfPath, vcfIncludeNonMutations, vcfShowSupportRead, outSamPath, outRefsMapCountPath, outUnalignedPath, parameters, numThreads, queryEndFraction, autoVerbose, guessReferenceAncestors, outAncestorPath, enableGapmers, startMillis);
+    boolean successful = run(referencePaths, queries, cacheDir, allowDuplicateContigNames, outVcfPath, vcfIncludeNonMutations, vcfShowSupportRead, outSamPath, outRefsMapCountPath, outUnalignedPath, parameters, numThreads, queryEndFraction, autoVerbose, guessReferenceAncestors, outAncestorPath, enableGapmers, startMillis);
     if (successful)
       System.exit(0);
     else
@@ -397,6 +402,9 @@ public class Main {
 "      By default, these pieces contain noncontiguous basepairs and might look like XXXXXXXX____XXXX.\n" +
 "      This flag makes these pieces be contiguous instead to look more like XXXXXXXXXXXX.\n" +
 "      THIS OPTION IS A TEMPORARY EXPERIMENT FOR TESTING THE PERFORMANCE OF GAPMERS.\n" +
+"\n" +
+"    --allow-duplicate-contig-names if multiple contigs have the same name, continue instead of throwing an error.\n" +
+"      This can be confusing but shouldn't cause any incorrect results.\n" +
 "\n" +
 "  OUTPUT FORMATS:\n" +
 "\n" +
@@ -485,7 +493,7 @@ public class Main {
   }
 
   // performs alignment and outputs results
-  public static boolean run(List<String> referencePaths, List<QueryProvider> queriesList, File cacheDir, String outVcfPath, boolean vcfIncludeNonMutations, boolean vcfShowSupportRead, String outSamPath, String outRefsMapCountPath, String outUnalignedPath, AlignmentParameters parameters, int numThreads, double queryEndFraction, boolean autoVerbose, boolean guessReferenceAncestors, String outAncestorPath, boolean enableGapmers, long startMillis) throws IllegalArgumentException, FileNotFoundException, IOException, InterruptedException {
+  public static boolean run(List<String> referencePaths, List<QueryProvider> queriesList, File cacheDir, boolean allowDuplicateContigNames, String outVcfPath, boolean vcfIncludeNonMutations, boolean vcfShowSupportRead, String outSamPath, String outRefsMapCountPath, String outUnalignedPath, AlignmentParameters parameters, int numThreads, double queryEndFraction, boolean autoVerbose, boolean guessReferenceAncestors, String outAncestorPath, boolean enableGapmers, long startMillis) throws IllegalArgumentException, FileNotFoundException, IOException, InterruptedException {
     DirCache dirCache;
     if (cacheDir != null)
       dirCache = new DirCache(cacheDir, new StorageFilesystem());
@@ -502,6 +510,11 @@ public class Main {
     List<Sequence> sortedReference = sortAndComplementReference(reference);
     ReferenceProvider referenceProvider;
     SequenceDatabase originalReference = new SequenceDatabase(sortedReference);
+    if (!allowDuplicateContigNames) {
+      if (!verifyNoDuplicateContigNames(originalReference)) {
+        return false;
+      }
+    }
 
     int minDuplicationLength = DuplicationDetector.chooseMinDuplicationLength(originalReference);
     int maxDuplicationLength = DuplicationDetector.chooseMaxDuplicationLength(originalReference);
@@ -708,6 +721,18 @@ public class Main {
         "com.sun.management:type=HotSpotDiagnostic", HotSpotDiagnosticMXBean.class);
     bean.dumpHeap("x-mapper.hprof", false);
     System.err.println("dumped heap to " + outputPath);
+  }
+
+  public static boolean verifyNoDuplicateContigNames(SequenceDatabase sequenceDatabase) {
+    List<String> duplicateNames = sequenceDatabase.getDuplicateNames();
+    if (duplicateNames.size() > 0) {
+      System.err.println("");
+      System.err.println(" Warning: " + duplicateNames.size() + " contig names were each found multiple times in the reference genome, including " + duplicateNames.get(0));
+      System.err.println(" This can be confusing but shouldn't cause any incorrect results.");
+      System.err.println(" If this is intentional, add `--allow-duplicate-contig-names` to continue");
+      return false;
+    }
+    return true;
   }
 
   public static AlignmentStatistics compare(ReferenceProvider referenceProvider, QueryProvider queries, DuplicationDetector approximateDuplicationDetector, long startMillis, AlignmentParameters parameters, int numThreads, double queryEndFraction, AlignmentCache alignmentCache, List<AlignmentListener> alignmentListeners, boolean autoVerbose) throws InterruptedException, IOException {

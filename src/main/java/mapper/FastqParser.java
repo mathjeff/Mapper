@@ -66,6 +66,9 @@ public class FastqParser implements SequenceProvider {
     if (this.keepQualityData) {
       builder.asRead(nameSuffix, qualityString, commentString);
     }
+    if (builder.getLength() < 1) {
+      throw new RuntimeException("Sequence " + name + " in " + this.path + " has length " + builder.getLength());
+    }
     return builder;
   }
 

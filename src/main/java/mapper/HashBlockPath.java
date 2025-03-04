@@ -17,10 +17,10 @@ public class HashBlockPath {
     this.database = database;
     this.sequenceDatabase = sequenceDatabase;
     this.query = query;
-    this.currentBlock = this.getStartingBlock(0);
+    this.currentBlock = new HashBlock(0, 0);
+    this.batchIndex = -1;
     this.logger = logger;
     this.queryShortName = queryShortName;
-    this.skipMultiblocks();
   }
 
   // steps to the next interesting HashBlock_Match in the path
@@ -66,7 +66,6 @@ public class HashBlockPath {
 
   // steps to the next HashBlock in the path having a sufficiently small number of matches
   private HashBlock getNextBlockWithGoodNumberOfMatches() {
-    HashBlock previous = this.currentBlock.getSingle();
     // advance until we find an interesting block, and return it
     while (true) {
       HashBlock next = this.advanceToNextPosition();

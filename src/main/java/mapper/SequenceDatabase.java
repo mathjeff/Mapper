@@ -4,6 +4,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
@@ -278,6 +279,23 @@ public class SequenceDatabase {
 
   public void setAncestral() {
     this.ancestral = true;
+  }
+
+  // returns a list of names of sequences whose names are the same as other names in the database
+  public List<String> getDuplicateNames() {
+    Map<String, Integer> nameCounts = new HashMap<String, Integer>();
+    List<String> duplicateNames = new ArrayList<String>();
+    for (Sequence sequence: this.sequences) {
+      String name = sequence.getName();
+      Integer count = nameCounts.get(name);
+      if (count == null)
+        count = 0;
+      count++;
+      nameCounts.put(name, count);
+      if (count == 2)
+        duplicateNames.add(name);
+    }
+    return duplicateNames;
   }
 
   private String getPathsString() {

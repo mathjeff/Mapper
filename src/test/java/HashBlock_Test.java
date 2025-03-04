@@ -72,6 +72,9 @@ public class HashBlock_Test {
     if (block.get_nextRequestMergeRight() != reverseBlock.get_nextRequestMergeLeft()) {
       Assert.fail("different merge directions: " + block.toString(sequence) + " next merge right = " + block.get_nextRequestMergeRight() + " and " + reverseBlock.toString(reverseSequence) + " next merge left = " + reverseBlock.get_nextRequestMergeLeft());
     }
+    if (!block.isPrimaryPolarity() && !block.isSecondaryPolarity()) {
+      Assert.fail("Block " + block.toString(sequence) + " declares neither primary nor secondary polarity");
+    }
     HashBlock extended = block.withGapAndExtension(sequence);
     HashBlock reverseExtended = reverseBlock.withGapAndExtension(reverseSequence);
     if ((extended == null) != (reverseExtended == null)) {

@@ -36,14 +36,14 @@ public class FastaParser implements SequenceProvider {
     }
 
     // read sequence name
-    String nameLine = reader.readLine();
-    if (nameLine == null)
+    String name = reader.readLine();
+    if (name == null)
       return null;
-    int spaceIndex = nameLine.indexOf(' ');
+    int spaceIndex = name.indexOf(' ');
     if (spaceIndex > 0)
-      nameLine = nameLine.substring(0, spaceIndex);
+      name = name.substring(0, spaceIndex);
     SequenceBuilder builder = new SequenceBuilder();
-    builder.setName(nameLine);
+    builder.setName(name);
     builder.setPath(path);
 
     // read sequence content until next sequence start marker
@@ -67,6 +67,9 @@ public class FastaParser implements SequenceProvider {
         continue;
       }
       builder.add(line);
+    }
+    if (builder.getLength() < 1) {
+      throw new RuntimeException("Sequence " + name + " in " + this.path + " has length " + builder.getLength());
     }
     return builder;
   }

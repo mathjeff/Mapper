@@ -24,6 +24,9 @@ public class Api {
     List<Sequence> referenceSequences = new ArrayList<Sequence>();
     for (int i = 0; i < references.size(); i++) {
       Sequence sequence = new SequenceBuilder().setName("reference-" + i).add(references.get(i)).build();
+      if (sequence.getLength() < 1) {
+        throw new RuntimeException("Sequence " + i + " has length " + sequence.getLength());
+      }
       referenceSequences.add(sequence);
       referenceSequences.add(sequence.reverseComplement());
     }

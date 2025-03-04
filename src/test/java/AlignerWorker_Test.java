@@ -641,6 +641,36 @@ public class AlignerWorker_Test {
     }
   }
 
+  @Test
+  public void testCustomParameters() {
+    String queryText =     "ACGCACCTCTTTT";
+    String referenceText =  "CGCGACTCT";
+
+    Sequence querySequence = new SequenceBuilder().setName("query").add(queryText).build();
+    Query query = new Query(querySequence);
+
+    AlignmentParameters parameters = new AlignmentParameters();
+    parameters.MutationPenalty = 1;
+    parameters.InsertionStart_Penalty = 0.8;
+    parameters.InsertionExtension_Penalty = 1;
+    parameters.DeletionStart_Penalty = 0.8;
+    parameters.DeletionExtension_Penalty = 1;
+    parameters.MaxErrorRate = 0.7;
+    parameters.AmbiguityPenalty = 0.9;
+    parameters.UnalignedPenalty = 0.9;
+
+    List<QueryAlignment> alignments = align(query, referenceText, parameters);
+    verifyOneAlignment(alignments);
+
+    QueryAlignment alignment = alignments.get(0);
+    String alignedB = alignment.getComponent(0).getAlignedTextB();
+    String expectedA = "CGCACCTCT";
+    String expectedB = "CGCGACTCT";
+    if (!alignedB.equals(expectedB)) {
+      fail("expected alignment of:\n" + expectedA + "\n" + expectedB + ", not\n" + alignment.format());
+    }
+  }
+
   private void doTestPairedEndQueries(boolean reverseQuerySequence2, int expectedNumMatches) {
     String reference = "AAAAAAAAAAACGGAAAGAAATAACTTAAACGAACTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACGGAAAGAAATAAA";
     String sequence1 =            "CGGAAAGAAA";                                                        // could also be here

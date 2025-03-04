@@ -90,12 +90,29 @@ public class Basepairs {
   }
 
   public static double getPenalty(byte encodedQuery, byte encodedReference, AlignmentParameters alignmentParameters) {
+    // The penalty of an alignment is essentially the log of how likely we think it is to observe this alignment
     if (!canMatch(encodedReference, encodedQuery)) {
-      // if the two basepairs don't match, that's a mutation
+      // if the two basepairs don't match, that's a mutation, and we know the penalty
       return alignmentParameters.MutationPenalty;
     }
-    // if the two basepairs can match, we still have to calculate a penalty if there is ambiguity
-    return alignmentParameters.AmbiguityPenalty * getMutationFalseNegativeRate(encodedReference);
+    // if the two basepairs can match, we have to calculate a penalty if there is ambiguity
+    // We want to calculate the probability that we could identify a mutation in one of these basepairs
+
+    // Suppose that the possible values reported for the query must be one of:
+    //  - The ambiguity code we have for it now
+    //  - Any other specific basepair that doesn't match that ambiguity code
+    // Suppose that the possible values reported for the reference must be one of:
+    //  - The ambiguity code we have for it now
+    //  - Any other specific basepair that doesn't match that ambiguity code
+
+    // This means:
+    //  - If the query's true value mutates into another specific basepair covered by its current ambiguity code, we expect it to be still reported via the same ambiguity code and we expect to not be able to detect this mutation
+    //  - If the query's true value mutates into another specific basepair covered by the reference's ambiguity code, we would still consider this to be a match and wouldn't notice the mutation
+    //  - If the query's true value mutates into another specific basepair that isn't covered by the query's current ambiguity code or the reference's current ambiguity code, then we could detect this mutation
+
+    // So, we want to compute the probability that a mutation in one of these basepairs would change it into a basepair that isn't included in the either the query's current ambiguity code or the reference's ambiguity code
+    byte encodedUnion = union(encodedQuery, encodedReference);
+    return alignmentParameters.AmbiguityPenalty * getMutationFalseNegativeRate(encodedUnion);
   }
 
   public static byte complement(byte encoded) {

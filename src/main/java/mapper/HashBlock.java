@@ -334,6 +334,8 @@ public class HashBlock implements IMultiHashBlock {
   }
 
   public boolean isSecondaryPolarity() {
+    if (this.requestMergeLeft != this.requestMergeRight)
+      return this.requestMergeRight;
     return this.forwardHash <= this.reverseHash;
   }
 
