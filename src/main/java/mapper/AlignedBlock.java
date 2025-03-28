@@ -146,6 +146,12 @@ public class AlignedBlock {
     return true;
   }
 
+  public int getIndelLength() {
+    if (aLength == bLength)
+      return 0;
+    return Math.max(aLength, bLength);
+  }
+
   // Modifies this alignment to refer to a new sequence
   // This can be useful if this alignment was computed in one way and applied to another sequence, for example, computed via an ancestor and applied to a child
   public void putSequenceB(Sequence newSequenceB) {

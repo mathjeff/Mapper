@@ -36,6 +36,23 @@ public class Counting_HashBlockPath_Test {
     }
   }
 
+  @Test
+  public void checkRepeatedHashblockMatchInsufficientEvenNearEndOfReference() {
+    String query     = "ACCC";
+    String reference = "ACCCACCCACCCACCCACCC";
+
+    Counting_HashBlockPath path = makePath(query, reference);
+
+    List<HashBlockMatch_Counter> matchingCounters = path.findGoodPositionsHavingPriorityUpTo(query.length());
+    if (matchingCounters.size() > 0) {
+      String message = "Expected 0 interesting offsets but found " + matchingCounters.size() + ":";
+      for (HashBlockMatch_Counter counter: matchingCounters) {
+        message += " offset " + counter.getMatch().getOffset();
+      }
+      fail(message);
+    }
+  }
+
   private boolean containsOffset(List<HashBlockMatch_Counter> counters, int offset) {
     for (HashBlockMatch_Counter counter: counters) {
       if (counter.getMatch().getOffset() == offset)

@@ -24,7 +24,7 @@ public class VcfFormatterWorker extends Thread {
   }
 
   private String format(VcfFormatRequest formatRequest) {
-    StringBuilder stringBuilder = new StringBuilder();
+    this.outputBuilder = new StringBuilder();
     boolean showSupportRead = this.showSupportRead;
     String sequenceName = formatRequest.sequence.getName();
     Alignments bases = formatRequest.alignments;
@@ -34,7 +34,7 @@ public class VcfFormatterWorker extends Thread {
       int displayIndex = i + 1;
       if (frequencies.getCount() > 0) {
         if (this.includeNonMutations || frequencies.hasAlternates())
-          writePosition(sequenceName, displayIndex, frequencies, stringBuilder, showSupportRead);
+          writePosition(sequenceName, displayIndex, frequencies, showSupportRead);
         this.numReferencePositionsMatched++;
       }
       int insertionIndex = 0;
@@ -42,40 +42,34 @@ public class VcfFormatterWorker extends Thread {
         AlignmentPosition insertion = bases.getInsertion(i, insertionIndex);
         if (!insertion.hasAlternates())
           break;
-        // TODO: it could be clearer to group the insertions into groups of multiple characters which indicate which characters
-        // appear together. However, this could also drastically change the visual vertical alignment of the columns in the file.
-        // Should we group these insertions into groups that appear together?
-        // Users can also check the --verbose output for full information about what aligned where
-        // When there are multiple SNPs next to each other, we don't specify which SNPs appeared together other than by showing
-        // one example, and we still show one example for insertions too
-        writePosition(sequenceName, -1 * displayIndex, insertion, stringBuilder, showSupportRead);
+        writePosition(sequenceName, -1 * displayIndex, insertion, showSupportRead);
         insertionIndex++;
       }
     }
-    return stringBuilder.toString();
+    return this.outputBuilder.toString();
   }
 
-  private void writePosition(String sequenceName, int rowNumber, AlignmentPosition frequencies, StringBuilder stringBuilder, boolean showSupportRead) {
-    stringBuilder.append(sequenceName);
-    stringBuilder.append('\t');
-    stringBuilder.append(Integer.toString(rowNumber));
-    stringBuilder.append('\t');
+  private void writePosition(String sequenceName, int rowNumber, AlignmentPosition frequencies, boolean showSupportRead) {
+    appendText(sequenceName);
+    newField();
+    appendText(Integer.toString(rowNumber));
+    newField();
 
     char reference = frequencies.getReference();
-    stringBuilder.append(reference);
-    stringBuilder.append('\t');
+    appendText(reference);
+    newField();
     char[] alternates = frequencies.getNonzeroAlternates(reference);
-    appendJoined(stringBuilder, ',', alternates);
-    stringBuilder.append('\t');
-    stringBuilder.append(frequencies.formatCount());
-    stringBuilder.append('\t');
+    appendJoined(',', alternates);
+    newField();
+    appendText(frequencies.formatCount());
+    newField();
 
-    writeDepths(frequencies, reference, alternates, false, stringBuilder);
-    stringBuilder.append('\t');
-    writeDepths(frequencies, reference, alternates, true, stringBuilder);
+    writeDepths(frequencies, reference, alternates, false);
+    newField();
+    writeDepths(frequencies, reference, alternates, true);
 
     if (showSupportRead) {
-      stringBuilder.append('\t');
+      newField();
       boolean isFirst = true;
       for (char alternate : alternates) {
         // we found a mutation; let's show one sample read that mapped to this position
@@ -83,49 +77,81 @@ public class VcfFormatterWorker extends Thread {
         if (isFirst) {
           isFirst = false;
         } else {
-          stringBuilder.append(",");
+          appendText(",");
         }
         if (sampleQuery != null) {
           int index = frequencies.getSampleAlternateIndex(alternate);
           if (frequencies.isSampleAlternateDeletion(alternate)) {
-            stringBuilder.append(sampleQuery.getRange(0, index));
-            stringBuilder.append("[-]");
-            stringBuilder.append(sampleQuery.getRange(index, sampleQuery.getLength() - index));
+            appendText(sampleQuery.getRange(0, index));
+            appendText("[-]");
+            appendText(sampleQuery.getRange(index, sampleQuery.getLength() - index));
           } else {
-            stringBuilder.append(sampleQuery.getRange(0, index));
-            stringBuilder.append('[');
-            stringBuilder.append(sampleQuery.charAt(index));
-            stringBuilder.append(']');
-            stringBuilder.append(sampleQuery.getRange(index + 1, sampleQuery.getLength() - 1 - index));
+            appendText(sampleQuery.getRange(0, index));
+            appendText('[');
+            appendText(sampleQuery.charAt(index));
+            appendText(']');
+            appendText(sampleQuery.getRange(index + 1, sampleQuery.getLength() - 1 - index));
           }
         }
       }
     }
-    stringBuilder.append('\n');
+    newLine();
   }
 
-  private void writeDepths(AlignmentPosition frequencies, char reference, char[] alternates, boolean isQueryEnd, StringBuilder stringBuilder) {
-    stringBuilder.append(frequencies.getCounts(reference, isQueryEnd));
+  private void writeDepths(AlignmentPosition frequencies, char reference, char[] alternates, boolean isQueryEnd) {
+    appendText(frequencies.getCounts(reference, isQueryEnd));
     for (char alternate : alternates) {
-      stringBuilder.append(';');
-      stringBuilder.append(frequencies.getCounts(alternate, isQueryEnd));
+      appendText(';');
+      appendText(frequencies.getCounts(alternate, isQueryEnd));
     }
   }
 
-  private void appendJoined(StringBuilder builder, char separator, char[] components) {
+  private void appendJoined(char separator, char[] components) {
     boolean first = true;
     for (int i = 0; i < components.length; i++) {
       char component = components[i];
       if (first) {
         first = false;
       } else {
-        builder.append(separator);
+        this.appendText(separator);
       }
-      builder.append(component);
+      this.appendText(component);
     }
   }
 
+  private void appendText(String text) {
+    this.outputBuilder.append(text);
+    if (text != null && text.length() > 0)
+      this.fieldNonempty = true;
+  }
+
+  private void appendText(char text) {
+    this.outputBuilder.append(text);
+    this.fieldNonempty = true;
+  }
+
+  private void endField() {
+    if (!this.fieldNonempty) {
+      // replace empty fields with a default value because it's more convenient for some users
+      this.outputBuilder.append('.');
+    }
+  }
+
+  private void newField() {
+    this.endField();
+    this.outputBuilder.append('\t');
+    this.fieldNonempty = false;
+  }
+
+  private void newLine() {
+    this.endField();
+    this.outputBuilder.append('\n');
+    this.fieldNonempty = false;
+  }
+
   VcfFormatRequest formatRequest;
+  StringBuilder outputBuilder;
+  boolean fieldNonempty;
   String results;
   int numReferencePositionsMatched;
   boolean includeNonMutations;

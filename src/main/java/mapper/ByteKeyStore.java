@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-// A ByteKeyStore is a Map<Integer, List<Byte>> that uses less memory
+// A ByteKeyStore is a Map<Integer, Set<byte[]> that uses less memory
 class ByteKeyStore {
   public ByteKeyStore(int numKeys, int maxCountPerKey, int numBitsPerValue) {
     this.cumulativeShortCounts = new short[numKeys];
@@ -356,22 +356,19 @@ class ByteKeyStore {
   }
 
   private ByteArrayList encode(ByteArrayList data) {
-    if (data == null || data.size() < 1 || !shouldCompress())
+    if (data == null || data.size() < 1)
       return data;
-    //System.err.println("");
-    //System.err.println("encoding data of length " + data.size());
-    for (int i = 0; i < data.size(); i++) {
-      //System.err.println("data[" + i + "] = " + data.get(i));
-    }
+    // sort the data so the consecutive differences are small and positive
+    sort(data);
+    if (!shouldCompress())
+      return data;
+
     // compute some sizes
     int numBytesPerDecodedValue = this.getNumBytesPerValue();
     int numItems = data.size() / numBytesPerDecodedValue;
     int numStepBits = chooseNumStepBits(numItems);
     long stepSize = (long)1 << (long)numStepBits;
     
-    // sort the data so the consecutive differences are small and positive
-    sort(data);
-
     // write values in order
     long previousValue = 0;
     ByteArrayList result = new ByteArrayList();

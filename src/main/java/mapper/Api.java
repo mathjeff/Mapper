@@ -2,7 +2,9 @@ package mapper;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 // The Api class contains functions that are intended to be called directly by code from other projects
 // We will try not to make incompatible changes to functions in this file too often
@@ -20,12 +22,22 @@ public class Api {
 
   // Constructs a ReferenceDatabase representing the given sequences (plus their reverse complements).
   public static ReferenceDatabase newDatabase(List<String> references, Logger logger) {
+    Map<String, String> referencesByName = new HashMap<String, String>();
+    for (int i = 0; i < references.size(); i++) {
+      referencesByName.put("reference-" + i, references.get(i));
+    }
+    return newDatabase(referencesByName, logger);
+  }
+
+  // Constructs a ReferenceDatabase representing the given sequences (plus their reverse complements).
+  public static ReferenceDatabase newDatabase(Map<String, String> referencesByName, Logger logger) {
     long startMillis = System.currentTimeMillis();
     List<Sequence> referenceSequences = new ArrayList<Sequence>();
-    for (int i = 0; i < references.size(); i++) {
-      Sequence sequence = new SequenceBuilder().setName("reference-" + i).add(references.get(i)).build();
+    for (Map.Entry<String, String> entry: referencesByName.entrySet()) {
+      String name = entry.getKey();
+      Sequence sequence = new SequenceBuilder().setName(name).add(entry.getValue()).build();
       if (sequence.getLength() < 1) {
-        throw new RuntimeException("Sequence " + i + " has length " + sequence.getLength());
+        throw new RuntimeException("Sequence " + name + " has length " + sequence.getLength());
       }
       referenceSequences.add(sequence);
       referenceSequences.add(sequence.reverseComplement());

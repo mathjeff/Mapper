@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 // searches in the given hashblockDatabase for long, duplicated sections of genome
 public class DuplicationDetector {
@@ -270,7 +271,7 @@ public class DuplicationDetector {
   private List<Set<Duplication>> getDuplicationsByLength() {
     List<Set<Duplication>> duplicationsByLength = new ArrayList<Set<Duplication>>();
     for (int i = 0; i <= this.maxSizeToProcess; i++) {
-      duplicationsByLength.add(new HashSet<Duplication>());
+      duplicationsByLength.add(new TreeSet<Duplication>());
     }
 
     for (TreeMap<Integer, Duplication> duplicationsHere: this.duplicationsBySequence.values()) {

@@ -57,13 +57,13 @@ public class Sequence {
   }
 
   protected byte computeEncodedCharAt(int index) {
-    // bit position (4 bits per basePair)
-    int bitPosition = index << 2;
-
-    // character index (16 bits per character)
-    int characterIndex = bitPosition >> 4;
-    // offset within character (16 bits per character)
-    int offsetInCharacter = bitPosition & 15;
+    // character index (16 bits per character and 4 bits per basepair, so 4 basepairs per character)
+    int characterIndex = index >> 2;
+    if (characterIndex < 0) {
+      throw new IllegalArgumentException("computeEncodedCharAt(" + index + ") attempting to access encoded character at " + characterIndex);
+    }
+    // offset within character (4 bits per basepair and 4 basepairs per character)
+    int offsetInCharacter = (index & 3) << 2;
 
     // the character to extract bits from
     char character = this.packedContents.charAt(characterIndex);

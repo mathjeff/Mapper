@@ -9,15 +9,18 @@ project.exec({
 def gitCommit = describeOutput.toString().replace("\n", "")
 def suffixOutput = new ByteArrayOutputStream()
 project.exec({
-  commandLine(["bash", "-c", "git status --porcelain | head -n 1 | sed 's/..*/-dev/'"])
+  commandLine(["git", "status", "--porcelain"])
   standardOutput = suffixOutput
 })
-def modificationSuffix = suffixOutput.toString().trim().replace("\n", "")
+def modificationSuffix = ""
+if (suffixOutput.toString().trim().replace("\n", "") != "") {
+  modificationSuffix = "-dev"
+}
 def gitVersion = gitCommit + modificationSuffix
 
 compileJava {
-  sourceCompatibility = 1.7
-  targetCompatibility = 1.7
+  sourceCompatibility = 1.8
+  targetCompatibility = 1.8
 }
 
 String mainClass = "mapper.Main"

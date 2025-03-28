@@ -275,8 +275,68 @@ public class SequenceAlignment {
     return referenceReversed;
   }
 
+  // Just returns the aligned text of the two sequences (using "-" for indels)
   public String format() {
     return this.getAlignedTextA() + "\n" + this.getAlignedTextB();
+  }
+
+  // Returns a detailed explanation of what this alignment is
+  public String formatVerbose() {
+    StringBuilder builder = new StringBuilder();
+
+    SequenceAlignment alignment = this;
+    Sequence query = alignment.getSequenceA();
+
+    int alignmentLength = alignment.getALength();
+    double penalty = alignment.getPenalty();
+
+    String alignedQuery = alignment.getAlignedTextA();
+
+    String alignedAncestralRef = alignment.getAlignedTextBHistory();
+    String alignedUnmutatedRef = alignment.getAlignedTextB();
+
+    String queryText = query.getText();
+    String expectedAlignedText = queryText;
+    if (alignment.isReferenceReversed()) {
+      String originalQueryText = query.reverseComplement().getText();
+      builder.append("        Query: " + originalQueryText + "\n");
+      builder.append("     RC Query: " + queryText + "\n");
+    } else {
+      builder.append("        Query: " + queryText + "\n");
+    }
+
+    if (!queryText.equals(alignedQuery)) {
+      // If printing the aligned query is different from printing the query, then also print
+      // the alignment of the query
+      builder.append("Aligned query: " + alignedQuery + "\n");
+    }
+    if (!alignedQuery.equals(alignedAncestralRef)) {
+      builder.append("Difference   : ");
+      int max = Math.min(alignedQuery.length(), alignedAncestralRef.length());
+      for (int i = 0; i < max; i++) {
+        char c1 = alignedQuery.charAt(i);
+        char c2 = alignedAncestralRef.charAt(i);
+        if (c1 == c2) {
+          builder.append(" ");
+        } else {
+          if (Basepairs.canMatch(Basepairs.encode(c1), Basepairs.encode(c2))) {
+            builder.append("~");
+          } else {
+            builder.append("!");
+          }
+        }
+      }
+      builder.append("\n");
+    }
+    if (!alignedAncestralRef.equals(alignedUnmutatedRef)) {
+      // If the ancestor analysis had an effect here, explain that too
+      builder.append("Ancestral ref: " + alignedAncestralRef + "(" + alignment.getSequenceBHistory().getName() + ", offset " + alignment.getStartOffset() + ")\n");
+      builder.append("Original ref : " + alignedUnmutatedRef + "(" + alignment.getSequenceB().getName() + ", offset " + alignment.getStartOffset() + ")\n");
+    } else {
+      builder.append("Aligned ref  : " + alignedUnmutatedRef + "(" + alignment.getSequenceB().getName() + ", offset " + alignment.getStartOffset() + ")\n");
+    }
+    builder.append("Penalty      : " + penalty + " (length: " + alignmentLength + ")\n");
+    return builder.toString();
   }
 
   public void putSequenceB(Sequence sequence) {

@@ -3,17 +3,22 @@ package mapper;
 import java.util.ArrayList;
 import java.util.List;
 
-// a HashBlock_Buffer listens for hashblocks, stores them, and emits a lot of them at once to a HashBlock_Database
+// a HashBlock_Buffer listens for hashblocks in a certain area, stores them, and emits a lot of them at once to a HashBlock_Database
 public class HashBlock_Buffer {
-  public HashBlock_Buffer(Sequence sequence, HashBlock_Database database, int minInterestingSize) {
-    this.sequence = sequence;
+  public HashBlock_Buffer(HashJob section, HashBlock_Database database, int minInterestingSize) {
+    this.section = section;
     this.database = database;
     this.minInterestingSize = minInterestingSize;
   }
 
   public void addHashblock(IMultiHashBlock block) {
-    HashBlock single = block.getSingle();
+    int startIndex = block.getStartIndex();
+    if (startIndex < this.section.minStartIndex)
+      return; // outside the interesting range
+    if (startIndex >= this.section.maxStartIndexExclusive)
+      return; // outside the interesting range
 
+    HashBlock single = block.getSingle();
     if (single == null) {
       this.multiBlocks.add(block);
       if (this.multiBlocks.size() >= 65536) {
@@ -28,9 +33,9 @@ public class HashBlock_Buffer {
   }
 
   public void flush() {
-    this.database.addHashblocks(this.sequence, this.multiBlocks);
+    this.database.addHashblocks(this.section.sequence, this.multiBlocks);
     this.multiBlocks.clear();
-    this.database.addHashblocks(this.sequence, this.singleBlocks);
+    this.database.addHashblocks(this.section.sequence, this.singleBlocks);
     this.singleBlocks.clear();
   }
 
@@ -41,6 +46,6 @@ public class HashBlock_Buffer {
   private List<IMultiHashBlock> multiBlocks = new ArrayList<IMultiHashBlock>();
   private List<IMultiHashBlock> singleBlocks = new ArrayList<IMultiHashBlock>();
   private HashBlock_Database database;
-  private Sequence sequence;
+  private HashJob section;
   private int minInterestingSize; // we don't have to save any hashblocks shorter than this because the HashBlock_Database won't be interested in them
 }

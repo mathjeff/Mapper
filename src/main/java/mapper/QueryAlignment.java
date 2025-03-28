@@ -109,6 +109,7 @@ public class QueryAlignment {
     return result;
   }
 
+  // returns a short description of what this alignment is: where it is and where any indels are
   public String format() {
     String result = "";
     for (int i = 0; i < this.alignments.size(); i++) {
@@ -120,6 +121,18 @@ public class QueryAlignment {
       result += "\n";
     }
     return result;
+  }
+
+  // returns a detailed description of what this alignment is
+  public String formatVerbose() {
+    StringBuilder builder = new StringBuilder();
+    if (this.getNumSequences() > 1) {
+      builder.append("Total penalty: " + this.getPenalty() + ": " + this.explainPenalty() + "\n");
+    }
+    for (SequenceAlignment component: this.getComponents()) {
+      builder.append(component.formatVerbose());
+    }
+    return builder.toString();
   }
 
   public boolean containsSameOffsetAsMatch(QueryMatch match) {

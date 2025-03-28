@@ -182,7 +182,7 @@ public class AlignerWorker_Test {
     Sequence query2Reversed = new SequenceBuilder().setName("temp").add(shared + suffix).build();
     Sequence query2 = new SequenceBuilder().setName("query2").add(query2Reversed.reverseComplement().getText()).build();
     String candidateMatch = prefix + sharedMutated + suffix;
-    String referenceText = "GGGG" + candidateMatch + "" + candidateMatch + "TTTT";
+    String referenceText = "GGGG" + candidateMatch + "AAAA" + candidateMatch + "TTTT";
 
     double expectedInnerDistance = -1 * candidateMatch.length();
     double deviationPerPenalty = candidateMatch.length() / 4;
@@ -194,7 +194,7 @@ public class AlignerWorker_Test {
       message += "Expected 2 alignments, not " + alignments.size() + ". ";
       message += "All " + alignments.size() + " alignments:\n";
       for (QueryAlignment alignment: alignments) {
-        message += alignment.format();
+        message += "Penalty " + alignment.getPenalty() + ": " + alignment.format();
         message += "\n";
       }
       fail(message);
@@ -671,6 +671,29 @@ public class AlignerWorker_Test {
     }
   }
 
+  @Test
+  public void testLongCheapIndel() {
+    String referencePrefix = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    String queryPrefix        = "AACACACGGTGTTCAC";
+    //                              !
+    String queryPrefixMutated = "AACCCACGGTGTTCAC";
+    String insertion = "CACCCGCCCGCGCGCTCTCTCG";
+    String sharedSuffix = "AATAACCGCCGGCGGTTATTAAAACCCCGGGGTTTTAAACCCGGGTTTAACCGGTTACGT";
+    String referenceSuffix = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    String queryText =                       queryPrefix        + insertion + sharedSuffix;
+    String referenceText = referencePrefix + queryPrefixMutated +             sharedSuffix + queryPrefix + referenceSuffix;
+
+    AlignmentParameters parameters = makeParameters();
+    parameters.InsertionExtension_Penalty = 0.2;
+    parameters.DeletionExtension_Penalty = 0.2;
+    parameters.MutationPenalty = 2;
+    Query query = new Query(new SequenceBuilder().setName("query").add(queryText).build());
+
+    List<QueryAlignment> alignments = align(query, referenceText, parameters);
+    QueryAlignment alignment = verifyOneAlignment(alignments);
+    verifyAlignment(alignment.getComponent(0), queryPrefixMutated + repeat("-",  insertion.length()) + sharedSuffix);
+  }
+
   private void doTestPairedEndQueries(boolean reverseQuerySequence2, int expectedNumMatches) {
     String reference = "AAAAAAAAAAACGGAAAGAAATAACTTAAACGAACTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACGGAAAGAAATAAA";
     String sequence1 =            "CGGAAAGAAA";                                                        // could also be here
@@ -720,7 +743,7 @@ public class AlignerWorker_Test {
     return Api.alignOnce(query, referenceText, parameters, new Logger(new StderrWriter()));
   }
 
-  private void verifyOneAlignment(List<QueryAlignment> alignments) {
+  private QueryAlignment verifyOneAlignment(List<QueryAlignment> alignments) {
     if (alignments.size() != 1) {
       StringBuilder builder = new StringBuilder();
       builder.append("Expected 1 alignment, got " + alignments.size() + ":\n");
@@ -732,11 +755,12 @@ public class AlignerWorker_Test {
       }
       fail(builder.toString());
     }
+    return alignments.get(0);
   }
 
   private void verifyAlignment(SequenceAlignment alignment, String expectedReference) {
     if (!alignment.getAlignedTextB().equals(expectedReference)) {
-      fail("Aligned to reference '" + alignment.getAlignedTextB() + "' instead of '" + expectedReference + "'");
+      fail("Incorrect alignment:\n" + alignment.format() + "\n  Expected reference:\n" + expectedReference);
     }
   }
 

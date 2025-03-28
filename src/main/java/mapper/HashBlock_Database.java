@@ -6,6 +6,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.ArrayDeque;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -19,18 +20,21 @@ import java.util.TreeSet;
 // If two HashBlocks have the same text, they are considered equal.
 public class HashBlock_Database implements ReferenceProvider {
   public HashBlock_Database(SequenceDatabase sequences) {
-    this.initialize(sequences, -1, -1, -1, true, null, new StatusLogger(new Logger(new mapper.StderrWriter()), 0));
+    this.initialize(sequences, -1, -1, -1, true, null, new StatusLogger(new Logger(new mapper.StderrWriter()), 0), false);
   }
 
   public HashBlock_Database(SequenceDatabase sequences, StatusLogger statusLogger) {
-    this.initialize(sequences, -1, -1, -1, true, null, statusLogger);
+    this.initialize(sequences, -1, -1, -1, true, null, statusLogger, false);
   }
 
   public HashBlock_Database(SequenceDatabase sequences, int minInterestingSize, int hintMaxInterestingSize, int maxNumShortMatches, boolean enableGapmers, DirCache dirCache, StatusLogger statusLogger) {
-    this.initialize(sequences, minInterestingSize, hintMaxInterestingSize, maxNumShortMatches, enableGapmers, dirCache, statusLogger);
+    this.initialize(sequences, minInterestingSize, hintMaxInterestingSize, maxNumShortMatches, enableGapmers, dirCache, statusLogger, false);
+  }
+  public HashBlock_Database(SequenceDatabase sequences, int minInterestingSize, int hintMaxInterestingSize, int maxNumShortMatches, boolean enableGapmers, DirCache dirCache, StatusLogger statusLogger, boolean hashInReverseOrder) {
+    this.initialize(sequences, minInterestingSize, hintMaxInterestingSize, maxNumShortMatches, enableGapmers, dirCache, statusLogger, hashInReverseOrder);
   }
 
-  private void initialize(SequenceDatabase sequences, int minInterestingSize, int hintMaxInterestingSize, int maxNumShortMatches, boolean enableGapmers, DirCache dirCache, StatusLogger statusLogger) {
+  private void initialize(SequenceDatabase sequences, int minInterestingSize, int hintMaxInterestingSize, int maxNumShortMatches, boolean enableGapmers, DirCache dirCache, StatusLogger statusLogger, boolean hashInReverseOrder) {
     this.logger = statusLogger.getLogger();
     this.statusLogger = statusLogger;
     this.enableGapmers = enableGapmers;
@@ -78,6 +82,7 @@ public class HashBlock_Database implements ReferenceProvider {
       this.maxNumShortMatches = maxNumShortMatches;
     }
     this.cacheDir = this.chooseCacheDir(dirCache);
+    this.hashInReverseOrder = hashInReverseOrder;
     this.chooseNextHashSize(0);
   }
 
@@ -136,7 +141,7 @@ public class HashBlock_Database implements ReferenceProvider {
   }
 
   // called by a thread that needs to have hashed all streams through this size
-  private void requireSetUpThroughSize(int size) {
+  public void requireSetUpThroughSize(int size) {
     while (true) {
       synchronized(this) {
         if (this.maxFullySetUpSize >= size) {
@@ -202,7 +207,27 @@ public class HashBlock_Database implements ReferenceProvider {
     }
     this.cumulativeHashedSize = 0;
     // Also list the sequences that we will need to hash if loading from the cache isn't sufficient
-    this.sequencesLeftToHash = new ArrayDeque<Sequence>(this.sequenceDatabase.getForwardSequencesOnly());
+    this.split_hashJobs();
+  }
+
+  // generates a collection of HashJobs requesting to hash each part of the reference
+  private void split_hashJobs() {
+    int targetJobSize = 50000;
+    this.sectionsLeftToHash = new ArrayDeque<HashJob>();
+    List<Sequence> sequences = this.sequenceDatabase.getForwardSequencesOnly();
+    if (this.hashInReverseOrder) { // for consistency unit tests
+      Collections.reverse(sequences);
+    }
+    for (Sequence sequence: sequences) {
+      int numJobsForThisSequence = (sequence.getLength() + targetJobSize - 1) / targetJobSize;
+      int previousStartIndex = 0;
+      for (int i = 1; i <= numJobsForThisSequence; i++) {
+        int startIndex = (int)((long)((long)sequence.getLength() * (long)i / (long)numJobsForThisSequence));
+        this.sectionsLeftToHash.add(new HashJob(sequence, previousStartIndex, startIndex));
+        previousStartIndex = startIndex;
+      }
+    }
+    this.numHashJobsOfThisLength = this.sectionsLeftToHash.size();
   }
 
   // called by a thread to contribute to setting up
@@ -210,6 +235,18 @@ public class HashBlock_Database implements ReferenceProvider {
     this.helpLoad();
     this.helpHash();
     this.helpPack();
+  }
+
+  // Specifies that this HashBlock_Database should verify its contents with a new HashBlock_Database for checking deterministic results
+  public void setVerifyConsistency() {
+    HashBlock_Database other = new HashBlock_Database(this.sequenceDatabase, minInterestingSize, -1, maxNumShortMatches, enableGapmers, null, statusLogger);
+    this.setVerifyWith(other);
+  }
+
+  // Specifies that any information put into this HashBlock_Database should be checked as matching with <other>
+  // This helps identify nondeterminisms
+  public void setVerifyWith(HashBlock_Database other) {
+    this.compareTo = other;
   }
 
   // helps load the reference from cache and waits until done loading
@@ -283,10 +320,11 @@ public class HashBlock_Database implements ReferenceProvider {
         }
         if (this.minNonloadableLength > this.maxInterestingSize) {
           // We loaded each PackedMap and don't need to re-hash any sequences
-          this.sequencesLeftToHash = new ArrayDeque<Sequence>();
+          this.sectionsLeftToHash = new ArrayDeque<HashJob>();
         }
         // Record that we don't need to rehash any lengths that we loaded successfully
         this.maxFullySetUpSize = Math.max(this.maxFullySetUpSize, this.minNonloadableLength - 1);
+        this.onReady();
       }
     }
   }
@@ -296,7 +334,7 @@ public class HashBlock_Database implements ReferenceProvider {
     while (true) {
       boolean sleep = false;
       synchronized(this) {
-        if (this.sequencesLeftToHash.size() < 1) {
+        if (this.sectionsLeftToHash.size() < 1) {
           if (this.numActiveHashers < 1) {
             return; // done
           } else {
@@ -317,28 +355,29 @@ public class HashBlock_Database implements ReferenceProvider {
 
   // does one iteration of helping hash the reference sequences
   private void helpHashOnce() {
-    Sequence sequence;
+    HashJob job;
     int size;
     synchronized(this) {
       size = this.maxInterestingSize;
-      if (this.sequencesLeftToHash.size() < 1) {
+      if (this.sectionsLeftToHash.size() < 1) {
         return;
       }
-      sequence = this.sequencesLeftToHash.remove();
+      job = this.sectionsLeftToHash.remove();
       this.numActiveHashers++;
     }
-    this.hashSequenceThroughSize(sequence, size);
+    Sequence sequence = job.sequence;
+    this.hashSequenceThroughSize(job, size);
     synchronized(this) {
       int previousNumActiveHashers = this.numActiveHashers;
       this.numActiveHashers--;
-      int numSequencesRemaining = this.sequencesLeftToHash.size() + this.numActiveHashers;
-      this.cumulativeHashedSize += sequence.getLength();
+      int numJobsRemaining = this.sectionsLeftToHash.size() + this.numActiveHashers;
+      this.cumulativeHashedSize += job.maxStartIndexExclusive - job.minStartIndex;
       long percentComplete = this.cumulativeHashedSize * 100 / this.totalForwardSize;
-      int numForwardSequences = this.sequenceDatabase.getNumSequences() / 2;
-      int completionIndex = numForwardSequences - numSequencesRemaining;
-      boolean important = (numSequencesRemaining == 0);
-      this.statusLogger.log("Hashed contig " + completionIndex + "/" + numForwardSequences + " (" + percentComplete + "%) with " + previousNumActiveHashers + " active workers", important);
-      if (numSequencesRemaining < 1) {
+      int numJobsOfThisLength = this.numHashJobsOfThisLength;
+      int completionIndex = numJobsOfThisLength - numJobsRemaining;
+      boolean important = (numJobsRemaining == 0);
+      this.statusLogger.log("Hashed section " + completionIndex + "/" + numJobsOfThisLength + " (" + percentComplete + "%) with " + previousNumActiveHashers + " active workers", important);
+      if (numJobsRemaining < 1) {
         while (size >= this.hashedBlocks.size())
           this.hashedBlocks.add(null);
         for (int i = 0; i <= size; i++) {
@@ -403,6 +442,7 @@ public class HashBlock_Database implements ReferenceProvider {
         }
 
         this.maxFullySetUpSize = this.maxInterestingSize;
+        this.onReady();
         this.statusLogger.log("Processed reference through size " + this.maxFullySetUpSize, true);
         if (this.cacheDir != null) {
           if (this.logger.getEnabled()) {
@@ -410,6 +450,23 @@ public class HashBlock_Database implements ReferenceProvider {
           }
         }
       }
+    }
+  }
+
+  // this function gets called whenever a new batch of PackedMaps becomes ready (either hashed or loaded from cache)
+  private void onReady() {
+    if (this.compareTo != null) {
+      this.verifyMatches(this.compareTo);
+    }
+  }
+
+  // checks that this database matches <other>
+  public void verifyMatches(HashBlock_Database other) {
+    other.requireSetUpThroughSize(this.maxFullySetUpSize);
+    for (int size = this.minInterestingSize; size <= this.maxFullySetUpSize; size++) {
+      PackedMap ourMap = this.hashedBlocks.get(size);
+      PackedMap otherMap = other.hashedBlocks.get(size);
+      ourMap.verifyMatches(otherMap);
     }
   }
 
@@ -425,25 +482,32 @@ public class HashBlock_Database implements ReferenceProvider {
     return new File(this.cacheDir, "length-" + numBasepairsUsed);
   }
 
-  private void hashSequenceThroughSize(Sequence sequence, int size) {
-    HashBlock_Buffer buffer = new HashBlock_Buffer(sequence, this, this.minInterestingSize);
+  // Generates hashblocks that start in the given section
+  private void hashSequenceThroughSize(HashJob section, int size) {
+    HashBlock_Buffer buffer = new HashBlock_Buffer(section, this, this.minInterestingSize);
+    Sequence sequence = section.sequence;
     HashBlock_Stream stream = new HashBlock_Stream(sequence, true, buffer);
 
     HashBlock_Pyramid pyramid = new HashBlock_Pyramid(stream);
 
+    int startIndex = section.minStartIndex;
+    int maxStartIndex = section.maxStartIndexExclusive;
     int level = 0;
-    int offset = -1;
-
-    //HashBlock_Row batch = stream.getNextBatch();
+    // Start at the beginning of the section
+    // We generate gapmers later in addHashBlocks, so we don't have to worry here about the possibility of this hashblock expanding in the reverse direction past the job start
+    int offset = startIndex -1;
 
     // Visit every block in this batch, which will trigger the visiting of all blocks in all other batches
     // Each batch (including this one) will call this.addBlock() for each discovered block
-    //HashBlock block = batch.getAfter(-1);
     while (true) {
       HashBlock_Row batch = pyramid.get(level);
+      batch.skipTo(startIndex - 1);
       IMultiHashBlock block = batch.getAfter(offset);
-      if (block == null)
+      if (block == null || block.getStartIndex() > maxStartIndex) {
+        // If we passed the end of the section, we're done
+        // We expand these hashblocks into gapmers later in addHashblocks, so we don't have to worry here about the possibility of a later hashblock expanding in the reverse direction before the job end
         break;
+      }
       if (block.getMinLength() <= size) {
         // also have to process the next batch because it might also have interesting blocks
         level++;
@@ -625,15 +689,18 @@ public class HashBlock_Database implements ReferenceProvider {
   long totalForwardSize;
   SequenceDatabase sequenceDatabase;
   Queue<Integer> lengthsLeftToLoad = new ArrayDeque<Integer>();
-  Queue<Sequence> sequencesLeftToHash = new ArrayDeque<Sequence>();
+  Queue<HashJob> sectionsLeftToHash = new ArrayDeque<HashJob>();
   Queue<PackedMap> mapsLeftToPack = new ArrayDeque<PackedMap>();
   int numActiveLoaders;
   int numActiveHashers;
   int numActivePackers;
   int minNonloadableLength;
+  int numHashJobsOfThisLength;
   Logger logger;
   File cacheDir;
   StatusLogger statusLogger;
   long cumulativeHashedSize;
   boolean enableGapmers = true;
+  HashBlock_Database compareTo;
+  boolean hashInReverseOrder;
 }

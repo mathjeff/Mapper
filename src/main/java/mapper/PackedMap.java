@@ -278,6 +278,81 @@ class PackedMap {
     deserializer.close();
   }
 
+  // confirms that all of the information in this PackedMap is the same as in <other>
+  public void verifyMatches(PackedMap other) {
+    if (this.stores.length != other.stores.length) {
+      throw new RuntimeException("" + this + " stores.length = " + this.stores.length + " != " + other + " stores.length " + other.stores.length);
+    }
+    if (this.maxInterestingCountPerKey != other.maxInterestingCountPerKey) {
+      throw new RuntimeException("" + this + " maxInterestingCountPerKey = " + this.maxInterestingCountPerKey + " != " + other + " maxInterestingCountPerKey " + other.maxInterestingCountPerKey);
+    }
+    for (int i = 0; i < this.stores.length; i++) {
+      SequencePosition[] ourMatches = this.get(i);
+      SequencePosition[] theirMatches = other.get(i);
+      String difference = compareMatches(ourMatches, theirMatches);
+      if (difference != null) {
+        throw new RuntimeException("(PackedMap with id " + id + " maxCountPerKey " + maxInterestingCountPerKey + ")\n this map get(" + i + ") = " + formatPositions(ourMatches) + " !=\n\n other map get(" + i + ") = " + formatPositions(theirMatches) + ":\n\n" + difference);
+      }
+    }
+    if (this.numItemsAdded != other.numItemsAdded) {
+      throw new RuntimeException("" + this + " numItemsAdded = " + this.numItemsAdded + " != " + other + " numItemsAdded " + other.numItemsAdded);
+    }
+  }
+
+  private String formatPositions(SequencePosition[] positions) {
+    if (positions == null) {
+      return "null";
+    }
+    StringBuilder result = new StringBuilder();
+    for (int i = 0; i < positions.length; i++) {
+      if (i > 0)
+        result.append(",");
+      result.append(positions[i]);
+    }
+    return result.toString();
+  }
+
+  private String compareMatches(SequencePosition[] a, SequencePosition[] b) {
+    if ((a == null) != (b == null))
+      return "One list of positions is null and the other isn't: " + a + ", " + b;
+    if (a == null && b == null)
+      return null;
+    String difference = pairwiseDifference(a, b);
+    if (difference != null) {
+      // If there is a difference, we can spend some time making a more helpful explanation
+      for (int i = 0; i < a.length; i++) {
+        if (!contains(a[i], b))
+          return "" + a[i] + " not found in " + b;
+      }
+      for (int i = 0; i < b.length; i++) {
+        if (!contains(b[i], a))
+          return "" + b[i] + " not found in " + a;
+      }
+      return "different orders: " + difference;
+    }
+    return null;
+  }
+
+  private String pairwiseDifference(SequencePosition[] a, SequencePosition[] b) {
+    if (a.length != b.length)
+      return "a.length = " + a.length + " != " + b.length;
+    for (int i = 0; i < a.length; i++) {
+      if (!a[i].equals(b[i])) {
+        return "a[" + i + "] = " + a[i] + " != b[" + i + "] = " + b[i];
+      }
+    }
+    return null;
+  }
+
+  private boolean contains(SequencePosition position, SequencePosition[] positions) {
+    for (int i = 0; i < positions.length; i++) {
+      if (position.equals(positions[i]))
+        return true;
+    }
+    return false;
+  }
+
+
   ByteKeyStore[] stores;
   int keyCapacity;
 

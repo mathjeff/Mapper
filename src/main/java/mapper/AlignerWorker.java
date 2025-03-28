@@ -47,9 +47,6 @@ public class AlignerWorker extends Thread {
     this.logger = alignmentLogger;
     this.referenceLogger = referenceLogger;
     this.detailedAlignmentLogger = alignmentLogger.incrementScope();
-    if (this.logger.getEnabled()) {
-      log("\nOutput from worker " + this.workerId + ":");
-    }
     this.queries = queries;
 
     try {
@@ -92,12 +89,12 @@ public class AlignerWorker extends Thread {
       try {
         moreWork = this.workQueue.take();
       } catch (InterruptedException e) {
-        System.err.println("Interrupted");
+        if (this.logger.getEnabled())
+          this.logger.log("Interrupted");
         break;
       }
       if (!moreWork)
         break;
-      //System.err.println("Worker.run got " + queries.size() + " queries");
       try {
         this.process();
         succeeded = true;
@@ -115,6 +112,7 @@ public class AlignerWorker extends Thread {
     HashBlock_Database hashblockDatabase = this.referenceProvider.get_HashBlock_database(this.referenceLogger);
     this.referenceDatabase = hashblockDatabase.getView();
     this.sequenceDatabase = hashblockDatabase.getSequenceDatabase();
+    this.shortestHashblockLength = hashblockDatabase.getMinInterestingSize();
     this.duplicationDetector.helpSetup();
   }
 
@@ -170,7 +168,7 @@ public class AlignerWorker extends Thread {
             if (logger.getEnabled()) {
               logger.log("Re-running query to determine how long it takes to align this query without the time required to hash the reference");
             }
-            alignmentsHere = this.align(query);
+            alignmentsHere = this.alignWithoutCache(query);
           }
         } catch (Exception e) {
           throw new RuntimeException("Failed to align " + query.format(), e);
@@ -244,7 +242,7 @@ public class AlignerWorker extends Thread {
     int hashCode = query.hashCode();
     if (hashCode > this.maxHashcodeToCache) {
       // if the cache hasn't been doing well lately, we don't use it as much
-      return this.doAlign(query);
+      return this.alignWithoutCache(query);
     }
     // If the cache seems useful then we use it more
     QueryAlignments cached = this.resultsCache.get(query);
@@ -260,13 +258,13 @@ public class AlignerWorker extends Thread {
         return new QueryAlignments(query, newComponent);
       }
     }
-    QueryAlignments result = this.doAlign(query);
+    QueryAlignments result = this.alignWithoutCache(query);
     this.resultsCache.addAlignment(query, result);
     return result;
   }
 
   // aligns to the unmodified reference we've been given
-  public QueryAlignments doAlign(Query query) {
+  public QueryAlignments alignWithoutCache(Query query) {
     QueryAlignments results = this.alignToAncestralReference(query);
     for (List<QueryAlignment> subAlignments: results.getAlignments().values()) {
       for (QueryAlignment alignment: subAlignments) {
@@ -332,7 +330,7 @@ public class AlignerWorker extends Thread {
       // see if we can show that the first match is the best
       while (true) {
         // check whether we can prove that the first alignment that we checked is also the best
-        double possiblePenalty = numMismatches * parameters.MutationPenalty;
+        double possiblePenalty = this.getPenaltyLowerBound(numMismatches);
         if (possiblePenalty > optimisticBestAlignment.getPenalty() + parameters.Max_PenaltySpan) {
           if (logger.getEnabled()) {
             if (optimisticBestAlignment.getPenalty() == 0) {
@@ -373,12 +371,12 @@ public class AlignerWorker extends Thread {
     int candidateNumMismatches = 0;
 
     while (true) {
-      double estimatedPenalty = candidateNumMismatches * parameters.MutationPenalty;
+      double estimatedPenalty = getPenaltyLowerBound(candidateNumMismatches);
 
       // We're not interested in alignments having more penalty than the highest we've found so far
       if (estimatedPenalty > bestPenalty + parameters.Max_PenaltySpan) {
         if (logger.getEnabled()) {
-          logger.log("Done checking alignment positions: estimatedPenalty = " + estimatedPenalty + ", bestPenalty = " + bestPenalty);
+          logger.log("Done checking alignment positions: " + candidateNumMismatches + " mismatches implies penalty " + estimatedPenalty + " which is more than bestPenalty " + bestPenalty);
         }
         break;
       }
@@ -457,6 +455,13 @@ public class AlignerWorker extends Thread {
     }
 
     return result;
+  }
+
+
+  private double getPenaltyLowerBound(int numMismatchedHashblocks) {
+    double mutationPenalty = numMismatchedHashblocks * parameters.MutationPenalty;
+    double indelPenalty = this.shortestHashblockLength * numMismatchedHashblocks * parameters.DeletionExtension_Penalty;
+    return Math.min(mutationPenalty, indelPenalty);
   }
 
   // Try to prove that this is the best alignment
@@ -607,68 +612,8 @@ public class AlignerWorker extends Thread {
 
   void printAlignment(Query query, List<QueryAlignment> alignments) {
     for (QueryAlignment alignment: alignments) {
-      if (query.getNumSequences() > 1) {
-        log("Total penalty: " + alignment.getPenalty() + ": " + alignment.explainPenalty());
-      }
-      for (SequenceAlignment component : alignment.getComponents()) {
-        this.printAlignment(component);
-      }
+      log(alignment.formatVerbose());
     }
-  }
-
-  void printAlignment(SequenceAlignment alignment) {
-    Sequence query = alignment.getSequenceA();
-
-    int alignmentLength = alignment.getALength();
-    double penalty = alignment.getPenalty();
-
-    String alignedQuery = alignment.getAlignedTextA();
-
-    String alignedAncestralRef = alignment.getAlignedTextBHistory();
-    String alignedUnmutatedRef = alignment.getAlignedTextB();
-
-    String queryText = query.getText();
-    String expectedAlignedText = queryText;
-    if (alignment.isReferenceReversed()) {
-      String originalQueryText = query.reverseComplement().getText();
-      log("        Query: " + originalQueryText);
-      log("     RC Query: " + queryText);
-    } else {
-      log("        Query: " + queryText);
-    }
-
-    if (!queryText.equals(alignedQuery)) {
-      // If printing the aligned query is different from printing the query, then also print
-      // the alignment of the query
-      log("Aligned query: " + alignedQuery);
-    }
-    if (!alignedQuery.equals(alignedAncestralRef)) {
-      StringBuilder differenceBuilder = new StringBuilder();
-      differenceBuilder.append("Difference   : ");
-      int max = Math.min(alignedQuery.length(), alignedAncestralRef.length());
-      for (int i = 0; i < max; i++) {
-        char c1 = alignedQuery.charAt(i);
-        char c2 = alignedAncestralRef.charAt(i);
-        if (c1 == c2) {
-          differenceBuilder.append(" ");
-        } else {
-          if (Basepairs.canMatch(Basepairs.encode(c1), Basepairs.encode(c2))) {
-            differenceBuilder.append("~");
-          } else {
-            differenceBuilder.append("!");
-          }
-        }
-      }
-      log(differenceBuilder.toString());
-    }
-    if (!alignedAncestralRef.equals(alignedUnmutatedRef)) {
-      // If the ancestor analysis had an effect here, explain that too
-      log("Ancestral ref: " + alignedAncestralRef + "(" + alignment.getSequenceBHistory().getName() + ", offset " + alignment.getStartOffset() + ")");
-      log("Original ref : " + alignedUnmutatedRef + "(" + alignment.getSequenceB().getName() + ", offset " + alignment.getStartOffset() + ")");
-    } else {
-      log("Aligned ref  : " + alignedUnmutatedRef + "(" + alignment.getSequenceB().getName() + ", offset " + alignment.getStartOffset() + ")");
-    }
-    log("Penalty      : " + penalty + " (length: " + alignmentLength + ")");
   }
 
   private void sendResults(List<QueryAlignments> results) {
@@ -719,6 +664,7 @@ public class AlignerWorker extends Thread {
   SequenceDatabase sequenceDatabase;
   Readable_HashBlock_Database referenceDatabase;
   Readable_DuplicationDetector duplicationDetector;
+  int shortestHashblockLength;
   List<AlignmentListener> resultsListeners;
   AlignmentParameters parameters;
   Logger logger;

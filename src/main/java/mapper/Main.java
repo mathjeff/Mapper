@@ -20,6 +20,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 import javax.management.MBeanServer;
 
@@ -28,6 +29,7 @@ public class Main {
   static Logger alignmentLogger;
   static Logger referenceLogger;
   static Logger silentLogger = Logger.NoOpLogger;
+  static TextWriter outputWriter = new StderrWriter();
 
   static int defaultExpectedDistanceBetweenPairedSequences = 100;
   static int defaultSpacingDeviationPerUnitPenalty = 50;
@@ -36,8 +38,7 @@ public class Main {
     long startMillis = System.currentTimeMillis();
     XMapperMetadata.setMainArguments(args);
 
-    //System.err.println(XMapperMetadata.guessCommandLine());
-    System.err.println("X-Mapper version " + XMapperMetadata.getVersion());
+    outputWriter.write("X-Mapper version " + XMapperMetadata.getVersion());
 
     // parse arguments
     List<String> referencePaths = new ArrayList<String>();
@@ -57,6 +58,7 @@ public class Main {
     boolean allowDuplicateContigNames = false;
     boolean autoVerbose = false;
     boolean guessReferenceAncestors = false;
+    boolean verifyConsistentDatabase = false;
 
     double mutationPenalty = -1; // default filled in later
     double indelStart_penalty = 1.5;
@@ -157,6 +159,10 @@ public class Main {
       }
       if ("--no-gapmers".equals(arg)) {
         enableGapmers = false;
+        continue;
+      }
+      if ("--verify-consistent-db".equals(arg)) {
+        verifyConsistentDatabase = true;
         continue;
       }
       if ("--no-output".equals(arg)) {
@@ -294,8 +300,8 @@ public class Main {
     if (outVcfPath == null && outSamPath == null && outRefsMapCountPath == null && outUnalignedPath == null && !allowNoOutput) {
       usageError("No output specified. Try --out-vcf <output path>, or if you really don't want to generate an output file, --no-output");
     }
-    alignmentLogger = new Logger(new StderrWriter(), 1, alignmentVerbosity);
-    referenceLogger = new Logger(new StderrWriter(), 1, referenceVerbosity);
+    alignmentLogger = new Logger(outputWriter, 1, alignmentVerbosity);
+    referenceLogger = new Logger(outputWriter, 1, referenceVerbosity);
     if (maxErrorRate >= 0 && mutationPenalty >= 0 && hasPairedQueriesWithoutSpecifyingSpacing) {
       usageError("Customized alignment penalties (--snp-penalty) and penalty threshold (--max-penalty) without customizing spacing penalty between paired-end queries (--paired-queries <queries> <queries2> --spacing <expected> <distancePerPenalty>).\n Please specify --spacing explicitly.\n If you really don't want to change the default spacing penalty, you can specify --spacing " + defaultExpectedDistanceBetweenPairedSequences + " " + defaultSpacingDeviationPerUnitPenalty);
     }
@@ -349,15 +355,15 @@ public class Main {
     parameters.MaxNumMatches = maxNumMatches;
     parameters.Max_PenaltySpan = max_penaltySpan;
 
-    System.err.println("" + referencePaths.size() + " reference files:");
+    outputWriter.write("" + referencePaths.size() + " reference files:");
     for (String referencePath: referencePaths) {
-      System.err.println("Reference path = " + referencePath);
+      outputWriter.write("Reference path = " + referencePath);
     }
-    System.err.println("" + queries.size() + " sets of queries: ");
+    outputWriter.write("" + queries.size() + " sets of queries: ");
     for (QueryProvider queryBuilder : queries) {
-      System.err.println(queryBuilder.toString());
+      outputWriter.write(queryBuilder.toString());
     }
-    boolean successful = run(referencePaths, queries, cacheDir, allowDuplicateContigNames, outVcfPath, vcfIncludeNonMutations, vcfShowSupportRead, outSamPath, outRefsMapCountPath, outUnalignedPath, parameters, numThreads, queryEndFraction, autoVerbose, guessReferenceAncestors, outAncestorPath, enableGapmers, startMillis);
+    boolean successful = run(referencePaths, queries, cacheDir, allowDuplicateContigNames, outVcfPath, vcfIncludeNonMutations, vcfShowSupportRead, outSamPath, outRefsMapCountPath, outUnalignedPath, parameters, numThreads, queryEndFraction, autoVerbose, guessReferenceAncestors, outAncestorPath, enableGapmers, verifyConsistentDatabase, startMillis);
     if (successful)
       System.exit(0);
     else
@@ -365,7 +371,7 @@ public class Main {
   }
 
   public static void usageError(String message) {
-    System.err.println(
+    outputWriter.write(
 "\n" +
 "Usage:\n"+
 "  java -jar x-mapper.jar [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --queries <queries.fastq> [options]\n" +
@@ -443,6 +449,9 @@ public class Main {
 "\n" +
 "      --out-ancestor <file> file to write our inferred ancestors. See also --no-infer-ancestors\n" +
 "\n" +
+// not documented because it's probably not helpful to most users
+//"\n    --verify-consistent-db analyze the reference genome twice and confirm that both analyses match." +
+//"\n" +
 "  Multiple output formats may be specified during a single run; for example:\n" +
 "\n" +
 "    --out-sam out.sam --out-unaligned out.fastq\n" +
@@ -489,12 +498,12 @@ public class Main {
 "      You may specify the same <dir> for multiple executions; data is actually stored in an appropriate subdirectory.\n"
 );
 
-    System.err.println(message);
+    outputWriter.write(message);
     System.exit(1);
   }
 
   // performs alignment and outputs results
-  public static boolean run(List<String> referencePaths, List<QueryProvider> queriesList, File cacheDir, boolean allowDuplicateContigNames, String outVcfPath, boolean vcfIncludeNonMutations, boolean vcfShowSupportRead, String outSamPath, String outRefsMapCountPath, String outUnalignedPath, AlignmentParameters parameters, int numThreads, double queryEndFraction, boolean autoVerbose, boolean guessReferenceAncestors, String outAncestorPath, boolean enableGapmers, long startMillis) throws IllegalArgumentException, FileNotFoundException, IOException, InterruptedException {
+  public static boolean run(List<String> referencePaths, List<QueryProvider> queriesList, File cacheDir, boolean allowDuplicateContigNames, String outVcfPath, boolean vcfIncludeNonMutations, boolean vcfShowSupportRead, String outSamPath, String outRefsMapCountPath, String outUnalignedPath, AlignmentParameters parameters, int numThreads, double queryEndFraction, boolean autoVerbose, boolean guessReferenceAncestors, String outAncestorPath, boolean enableGapmers, boolean verifyConsistentDatabase, long startMillis) throws IllegalArgumentException, FileNotFoundException, IOException, InterruptedException {
     DirCache dirCache;
     if (cacheDir != null)
       dirCache = new DirCache(cacheDir, new StorageFilesystem());
@@ -505,7 +514,7 @@ public class Main {
     if (outVcfPath != null)
       writer = new VcfWriter(outVcfPath, vcfIncludeNonMutations, queryEndFraction, vcfShowSupportRead);
 
-    System.err.println("Loading reference");
+    outputWriter.write("Loading reference");
     boolean keepQualityData = (outUnalignedPath != null);
     SequenceProvider reference = DataLoader.LoadFrom(referencePaths, false);
     List<Sequence> sortedReference = sortAndComplementReference(reference);
@@ -522,17 +531,22 @@ public class Main {
     // The main purpose of the DuplicationDetector is to detect regions of the genome that have more duplication than normal, so we increase the maximum number of short matches that its HashBlock_Database is willing to provide
     // This shouldn't be very slow because we don't run the DuplicationDetector very many times, unlike aligning queries
     int duplicationDetector_maxNumShortMatches = 8;
-    Logger logger = new Logger(new StderrWriter());
+    Logger logger = new Logger(outputWriter);
     StatusLogger statusLogger = new StatusLogger(logger, startMillis);
 
     if (guessReferenceAncestors) {
       HashBlock_Database originalReference_database = new HashBlock_Database(originalReference, minDuplicationLength, maxDuplicationLength, duplicationDetector_maxNumShortMatches, enableGapmers, dirCache, statusLogger);
+      if (verifyConsistentDatabase)
+        originalReference_database.setVerifyConsistency();
       DuplicationDetector ancestryDuplicationDetector = new DuplicationDetector(originalReference_database, minDuplicationLength, maxDuplicationLength, 3, 1, dirCache, statusLogger);
       double dissimilarityThreshold = parameters.MaxErrorRate / parameters.MutationPenalty;
-      referenceProvider = new AncestryDetector(ancestryDuplicationDetector, sortedReference, dissimilarityThreshold, statusLogger).setOutputPath(outAncestorPath).setResultingDatabaseEnableGapmers(enableGapmers);
+      referenceProvider = new AncestryDetector(ancestryDuplicationDetector, sortedReference, dissimilarityThreshold, statusLogger).setOutputPath(outAncestorPath).setResultingDatabaseEnableGapmers(enableGapmers).setResultingDatabaseVerifyConsistency(verifyConsistentDatabase);
 
     } else {
-      referenceProvider = new HashBlock_Database(originalReference, -1, maxDuplicationLength, -1, enableGapmers, dirCache, statusLogger);
+      HashBlock_Database referenceDatabase = new HashBlock_Database(originalReference, -1, maxDuplicationLength, -1, enableGapmers, dirCache, statusLogger);
+      if (verifyConsistentDatabase)
+        referenceDatabase.setVerifyConsistency();
+      referenceProvider = referenceDatabase;
     }
 
     // We store some approximate duplication locations to help us determine which parts of the reference might be unique
@@ -547,10 +561,17 @@ public class Main {
     List<AlignmentListener> listeners = new ArrayList<AlignmentListener>();
     MatchDatabase matchDatabase = new MatchDatabase(queryEndFraction);
     ReferenceAlignmentCounter referenceAlignmentCounter = new ReferenceAlignmentCounter();
+    if (outRefsMapCountPath != null) {
+      listeners.add(referenceAlignmentCounter);
+    }
     AlignmentCounter matchCounter = new AlignmentCounter();
     if (outVcfPath != null) {
       listeners.add(matchDatabase);
     }
+    PenaltySummarizer penaltySummarizer = new PenaltySummarizer(parameters);
+    listeners.add(penaltySummarizer);
+    IndelSummarizer indelSummarizer = new IndelSummarizer();
+    listeners.add(indelSummarizer);
     SamWriter samWriter = null;
     OutputStream samStreamToClose = null;
     if (outSamPath != null) {
@@ -569,9 +590,6 @@ public class Main {
     if (outUnalignedPath != null) {
       unalignedWriter = new UnalignedQuery_Writer(outUnalignedPath, queries.get_allReadsContainQualityInformation());
       listeners.add(unalignedWriter);
-    }
-    if (outRefsMapCountPath != null) {
-      listeners.add(referenceAlignmentCounter);
     }
     listeners.add(matchCounter);
     AlignmentCache alignmentCache = new AlignmentCache();
@@ -592,11 +610,11 @@ public class Main {
     if (outRefsMapCountPath != null) {
       long computationEnd = System.currentTimeMillis();
       long computationTime = (computationEnd - startMillis) / 1000;
-      System.err.println("Writing RefsMapCount results at " + computationTime + "s");
+      outputWriter.write("Writing RefsMapCount results at " + computationTime + "s");
       referenceAlignmentCounter.sumAlignments(outRefsMapCountPath);
       long writingEnd = System.currentTimeMillis();
       long writingTime = (writingEnd - startMillis) / 1000;
-      System.err.println("Saved " + outRefsMapCountPath + " at " + writingTime + "s");
+      outputWriter.write("Saved " + outRefsMapCountPath + " at " + writingTime + "s");
     }
     String displayCoverage = null;
     if (outVcfPath != null) {
@@ -604,9 +622,9 @@ public class Main {
       Map<Sequence, Alignments> alignments = matchDatabase.groupByPosition();
       long computationEnd = System.currentTimeMillis();
       double computationTime = (double)(computationEnd - startMillis) / 1000.0;
-      System.err.println("Writing vcf results at " + computationTime + "s");
+      outputWriter.write("Writing vcf results at " + computationTime + "s");
       writer.write(alignments, numThreads);
-      System.err.println("Saved " + outVcfPath);
+      outputWriter.write("Saved " + outVcfPath);
       long numMatchedPositions = writer.getNumReferencePositionsMatched();
       long numPositions = referenceDatabase.getTotalForwardSize();
 
@@ -620,34 +638,40 @@ public class Main {
       displayCoverage = " Coverage                      : " + displayCoverage + " of the reference (" + numMatchedPositions + "/" + numPositions + ") was matched";
     }
     // show statistics
-    System.err.println("");
-    System.err.println("Statistics: ");
+    outputWriter.write("");
+    outputWriter.write("Statistics: ");
     if (matchCounter.getNumMatchingSequences() != matchCounter.getNumAlignedQueries()) {
       // paired-end reads
       Distribution distance = matchCounter.getDistanceBetweenQueryComponents();
-      System.err.println(" Query pair separation distance: avg: " + (float)distance.getMean() + " stddev: " + (float)distance.getStdDev() + " (adjust via --spacing)");
+      outputWriter.write(" Query pair separation distance: avg: " + (float)distance.getMean() + " stddev: " + (float)distance.getStdDev() + " (adjust via --spacing)");
     }
-    System.err.println(" Alignment rate                : " + matchPercent + "% of query sequences (" + numMatchingQuerySequences + "/" + numQuerySequences + ")");
+    outputWriter.write(" Alignment rate                : " + matchPercent + "% of query sequences (" + numMatchingQuerySequences + "/" + numQuerySequences + ")");
     if (displayCoverage != null) {
-      System.err.println(displayCoverage);
+      outputWriter.write(displayCoverage);
     }
-    System.err.println(" Average penalty               : " + averagePenaltyPerBase + " per base (" + (long)totalAlignedPenalty + "/" + (long)totalAlignedQueryLength + ") in aligned queries");
+    outputWriter.write(" Average penalty               : " + averagePenaltyPerBase + " per base (" + (long)totalAlignedPenalty + "/" + (long)totalAlignedQueryLength + ") in aligned queries");
     if (statistics != null) {
       long numIndels = statistics.numIndels;
       float indelsPerPosition = (float)numIndels / (float)totalAlignedQueryLength;
-      System.err.println(" Num indels                    : " + indelsPerPosition + " per base (" + numIndels + "/" + (long)totalAlignedQueryLength + ") in aligned queries");
+      outputWriter.write(" Num indels                    : " + indelsPerPosition + " per base (" + numIndels + "/" + (long)totalAlignedQueryLength + ") in aligned queries");
     }
+    DisplayTable table = new DisplayTable();
+    table.addShortColumn(" ");
+    table.addColumn(Histogram.formatColumn("Alignment Penalties Graph:", "Count", "Penalty/Basepair", 0, parameters.MaxErrorRate, 20, penaltySummarizer.getCounts()));
+    table.addShortColumn(" ");
+    double[] indelLengthCounts = indelSummarizer.getInterestingIndelLengthCounts();
+    table.addColumn(Histogram.formatColumn("Indel Lengths Graph:", "Count", "Length", 0, indelLengthCounts.length + 1, 20, indelLengthCounts));
+    outputWriter.write(table.format());
 
     if (statistics != null) {
-      System.err.println("");
-      System.err.println("Performance:");
+      outputWriter.write("Performance:");
 
       System.gc();
       Runtime runtime = Runtime.getRuntime();
       long maxAllowedMemory = runtime.maxMemory();
       long usedMemory = runtime.totalMemory() - runtime.freeMemory();
       long usedMemoryMB = usedMemory / 1024 / 1024;
-      System.err.println(" Ending memory usage: " + usedMemoryMB + "mb");
+      outputWriter.write(" Ending memory usage: " + usedMemoryMB + "mb");
 
       Query slowestQuery = statistics.slowestQuery;
 
@@ -659,40 +683,40 @@ public class Main {
           numAlignmentsText = "1 time";
         else
           numAlignmentsText = "" + numAlignments + " times";
-        System.err.println(" Slowest query: #" + slowestQuery.getId() + " (" + statistics.slowestQueryMillis + "ms) : " + queryDisplayText + " aligned " + numAlignmentsText);
+        outputWriter.write(" Slowest query: #" + slowestQuery.getId() + " (" + statistics.slowestQueryMillis + "ms) : " + queryDisplayText + " aligned " + numAlignmentsText);
       }
 
       Query queryAtRandomMoment = statistics.queryAtRandomMoment;
       if (queryAtRandomMoment != null) {
-        System.err.println(" Query at random moment: #" + queryAtRandomMoment.getId() + " : " + queryAtRandomMoment.format());
+        outputWriter.write(" Query at random moment: #" + queryAtRandomMoment.getId() + " : " + queryAtRandomMoment.format());
       }
 
       int millisOnUnalignedQueries = (int)(statistics.cpuMillisSpentOnUnalignedQueries / 1000 / numThreads);
-      System.err.println(" Unaligned queries took        : " + statistics.cpuMillisSpentOnUnalignedQueries + " cpu-ms (" + millisOnUnalignedQueries + "s)");
+      outputWriter.write(" Unaligned queries took        : " + statistics.cpuMillisSpentOnUnalignedQueries + " cpu-ms (" + millisOnUnalignedQueries + "s)");
 
       int immediateAcceptancePercent = (int)(statistics.numCasesImmediatelyAcceptingFirstAlignment * 100 / statistics.numQueriesLoaded);
-      System.err.println(" Immediately accepted          : " + immediateAcceptancePercent + "% alignments (" + statistics.numCasesImmediatelyAcceptingFirstAlignment + "/" + statistics.numQueriesLoaded + ")");
+      outputWriter.write(" Immediately accepted          : " + immediateAcceptancePercent + "% alignments (" + statistics.numCasesImmediatelyAcceptingFirstAlignment + "/" + statistics.numQueriesLoaded + ")");
       int millisAligningMatches = (int)(statistics.cpuMillisSpentAligningMatches / 1000 / numThreads);
-      System.err.println(" Time aligning matches         : " + statistics.cpuMillisSpentAligningMatches + " cpu-ms (" + millisAligningMatches + "s)");
+      outputWriter.write(" Time aligning matches         : " + statistics.cpuMillisSpentAligningMatches + " cpu-ms (" + millisAligningMatches + "s)");
       int millisThroughOptimisticBestAlignments = (int)(statistics.cpuMillisThroughOptimisticBestAlignments / 1000 / numThreads);
-      System.err.println(" Finding optimistic alignments : " + statistics.cpuMillisThroughOptimisticBestAlignments + " cpu-ms (" + millisThroughOptimisticBestAlignments + "s)");
+      outputWriter.write(" Finding optimistic alignments : " + statistics.cpuMillisThroughOptimisticBestAlignments + " cpu-ms (" + millisThroughOptimisticBestAlignments + "s)");
       int queriesLoadedFromCachePercent = (int)((long)100 * (long)statistics.numCacheHits / (long)statistics.numQueriesLoaded);
       int queriesSavedToCachePercent = (int)((long)100 * alignmentCache.getUsage() / (long)statistics.numQueriesLoaded);
       long numQueriesNotInCache = statistics.numQueriesLoaded - alignmentCache.getUsage() - statistics.numCacheHits;
       int queriesNotInCachePercent = (int)((long) 100 * (long)numQueriesNotInCache / (long)statistics.numQueriesLoaded);
 
-      System.err.println(" Alignment cache usage         : " + queriesLoadedFromCachePercent + "% (" + statistics.numCacheHits + ") loaded, " + queriesSavedToCachePercent + "% (" + alignmentCache.getUsage() + ") stored, " + queriesNotInCachePercent + "% (" + numQueriesNotInCache + ") skipped");
-      System.err.println(" Time reading queries          : " + statistics.millisReadingQueries + "ms");
-      System.err.println(" Time launching workers        : " + statistics.millisLaunchingWorkers + "ms");
-      System.err.println(" Time waiting for workers      : " + statistics.millisWaitingForWorkers + "ms");
+      outputWriter.write(" Alignment cache usage         : " + queriesLoadedFromCachePercent + "% (" + statistics.numCacheHits + ") loaded, " + queriesSavedToCachePercent + "% (" + alignmentCache.getUsage() + ") stored, " + queriesNotInCachePercent + "% (" + numQueriesNotInCache + ") skipped");
+      outputWriter.write(" Time reading queries          : " + statistics.millisReadingQueries + "ms");
+      outputWriter.write(" Time launching workers        : " + statistics.millisLaunchingWorkers + "ms");
+      outputWriter.write(" Time waiting for workers      : " + statistics.millisWaitingForWorkers + "ms");
       if (statistics.containsLongRead) {
-        System.err.println("\n Not optimized for long reads. You might be interested in --split-queries-past-size.");
+        outputWriter.write("\n Not optimized for long reads. You might be interested in --split-queries-past-size.");
       }
       if (cacheDir == null) {
         if (guessReferenceAncestors)
-          System.err.println("\n Add --cache-dir <dir> to cache some analysis of the reference genome");
+          outputWriter.write("\n Add --cache-dir <dir> to cache some analysis of the reference genome");
         else
-          System.err.println("\n Add --cache-dir <dir> to cache the analysis of the reference genome");
+          outputWriter.write("\n Add --cache-dir <dir> to cache the analysis of the reference genome");
       }
 
     }
@@ -708,29 +732,29 @@ public class Main {
       unalignedWriter.close();
     long end = System.currentTimeMillis();
     double totalTime = ((double)end - (double)startMillis) / 1000.0;
-    System.err.println("");
-    System.err.println(successStatus + " in " + totalTime + "s.");
+    outputWriter.write("");
+    outputWriter.write(successStatus + " in " + totalTime + "s.");
     return successful;
   }
 
   public static void dumpHeap() throws IOException {
     String outputPath = "x-mapper.hprof";
-    System.err.println("dumping heap to " + outputPath);
+    outputWriter.write("dumping heap to " + outputPath);
     MBeanServer server = ManagementFactory.getPlatformMBeanServer();
     HotSpotDiagnosticMXBean bean =
         ManagementFactory.newPlatformMXBeanProxy(server,
         "com.sun.management:type=HotSpotDiagnostic", HotSpotDiagnosticMXBean.class);
     bean.dumpHeap("x-mapper.hprof", false);
-    System.err.println("dumped heap to " + outputPath);
+    outputWriter.write("dumped heap to " + outputPath);
   }
 
   public static boolean verifyNoDuplicateContigNames(SequenceDatabase sequenceDatabase) {
     List<String> duplicateNames = sequenceDatabase.getDuplicateNames();
     if (duplicateNames.size() > 0) {
-      System.err.println("");
-      System.err.println(" Warning: " + duplicateNames.size() + " contig names were each found multiple times in the reference genome, including " + duplicateNames.get(0));
-      System.err.println(" This can be confusing but shouldn't cause any incorrect results.");
-      System.err.println(" If this is intentional, add `--allow-duplicate-contig-names` to continue");
+      outputWriter.write("");
+      outputWriter.write(" Warning: " + duplicateNames.size() + " contig names were each found multiple times in the reference genome, including " + duplicateNames.get(0));
+      outputWriter.write(" This can be confusing but shouldn't cause any incorrect results.");
+      outputWriter.write(" If this is intentional, add `--allow-duplicate-contig-names` to continue");
       return false;
     }
     return true;
@@ -801,7 +825,7 @@ public class Main {
           int queryLength = queryBuilder.getLength();
           if (queryLength > warnReadsLongerThanLength) {
             if (!warnedNotOptimizedForLongReads) {
-              System.err.println("\n  Warning: Found read of length " + queryLength + ", longer than " + warnReadsLongerThanLength + ". This version of X-Mapper is not optimized for long reads. You may be interested in --split-queries-past-size\n");
+              outputWriter.write("\n  Warning: Found read of length " + queryLength + ", longer than " + warnReadsLongerThanLength + ". This version of X-Mapper is not optimized for long reads. You may be interested in --split-queries-past-size\n");
               warnedNotOptimizedForLongReads = true;
             }
           }
@@ -837,10 +861,11 @@ public class Main {
           long elapsed = (now - startMillis) / 1000;
 
           // give these queries to this worker
-          Logger workerAlignmentLogger = alignmentLogger.withWriter(new BufferedWriter());
-          Logger workerReferenceLogger = referenceLogger.withWriter(new BufferedWriter());
+          BufferedWriter loggerWriter = new BufferedWriter(outputWriter, "\nOutput from worker " + workerIndex + ":", 100000);
+          Logger workerAlignmentLogger = alignmentLogger.withWriter(loggerWriter);
+          Logger workerReferenceLogger = referenceLogger.withWriter(loggerWriter);
           if (autoVerbose && workerIndex == 0) {
-            workerAlignmentLogger = new Logger(new BufferedWriter(), 1, Integer.MAX_VALUE);
+            workerAlignmentLogger = new Logger(loggerWriter, 1, Integer.MAX_VALUE);
           }
           AlignerWorker worker;
           boolean workerAlreadyRunning;
@@ -870,7 +895,7 @@ public class Main {
             if (elapsed != lastPrintTime) {
               // note elapsed != 0 because lastPrintTime starts at 0
               long queriesPerSecond = numQueriesAssigned / elapsed;
-              System.err.println("Processing query " + numQueriesAssigned + " at " + elapsed + "s (" + queriesPerSecond + " q/s), " + workers.size() + " workers, " + pendingQueries.size() + "/" + targetNumPendingJobs + " ready jobs");
+              outputWriter.write("Processing query " + numQueriesAssigned + " at " + elapsed + "s (" + queriesPerSecond + " q/s), " + workers.size() + " workers, " + pendingQueries.size() + "/" + targetNumPendingJobs + " ready jobs");
               if (!checkMemoryUsage()) {
                 targetNumPendingJobsPerWorker = 1;
               }
@@ -885,10 +910,16 @@ public class Main {
       long waitStart = System.currentTimeMillis();
       while (!progressed || (everSaturatedWorkers && completedWorkers.peek() != null)) {
         // process any workers that completed
-        AlignerWorker worker = completedWorkers.take();
+        AlignerWorker worker = completedWorkers.poll(1, TimeUnit.SECONDS);
+        if (worker == null) {
+          if (referenceProvider.getCanUseHelp())
+            break;
+          else
+            continue;
+        }
         boolean succeeded = worker.tryComplete();
         if (succeeded == false) {
-          System.err.println("Worker failed; aborting");
+          outputWriter.write("Worker failed; aborting");
           while (completedWorkers.peek() != null) {
             completedWorkers.take().tryComplete();
           }
@@ -956,7 +987,7 @@ public class Main {
       long maxAllowedMemoryMB = maxAllowedMemory / 1024 / 1024;
       long usedMemoryMB = usedMemory / 1024 / 1024;
       int usagePercent = (int)(usageFraction * 100);
-      System.err.println("Low memory! " + usagePercent + "% used (" + usedMemoryMB + "M/" + maxAllowedMemoryMB + "M). Try larger Xmx");
+      outputWriter.write("Low memory! " + usagePercent + "% used (" + usedMemoryMB + "M/" + maxAllowedMemoryMB + "M). Try larger Xmx");
       return false;
     }
     return true;

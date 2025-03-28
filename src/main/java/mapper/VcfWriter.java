@@ -26,8 +26,9 @@ public class VcfWriter {
     this.writeText("\n");
     if (this.showSupportRead) {
       this.writeText("#CHROM\tPOS\tREF\tALT\tDP\tDETAILS-MIDDLE\tDETAILS-ENDS\tSUPPORT\n");
+    } else {
+      this.writeText("#CHROM\tPOS\tREF\tALT\tDP\tDETAILS-MIDDLE\tDETAILS-ENDS\n");
     }
-    this.writeText("#CHROM\tPOS\tREF\tALT\tDP\tDETAILS-MIDDLE\tDETAILS-ENDS\n");
 
     List<VcfFormatRequest> jobs = this.splitJobs(alignments, numParallelJobs);
     int waitIndex = 0; // index of next worker to wait for

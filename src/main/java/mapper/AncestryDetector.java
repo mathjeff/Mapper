@@ -47,6 +47,11 @@ public class AncestryDetector implements ReferenceProvider {
     return this;
   }
 
+  public AncestryDetector setResultingDatabaseVerifyConsistency(boolean enable) {
+    this.resultingDatabaseVerifyConsistency = enable;
+    return this;
+  }
+
   public boolean getCanUseHelp() {
     HashBlock_Database hashblockDatabase;
     synchronized(this) {
@@ -114,7 +119,7 @@ public class AncestryDetector implements ReferenceProvider {
         sequenceDatabase.setAncestral();
         this.result = new HashBlock_Database(sequenceDatabase, -1, -1, -1, this.resultingDatabaseEnableGapmers, null, this.statusLogger);
         this.considerSavingDatabase(sequenceDatabase);
-        System.err.println("AncestryDetector done");
+        this.statusLogger.log("AncestryDetector done", true);
       }
     }
     // wait for all workers to be done
@@ -412,7 +417,6 @@ public class AncestryDetector implements ReferenceProvider {
       }
     }
     SimilarityAnalysis result = new SimilarityAnalysis(sequence, analysisInitialIndex, bound, this.getMatchScore(duplication.getLength()));
-    //System.err.println("computeAnalysisBounds for duplication length " + duplication.getLength() + " at " + sequence.getName() + "[" + startIndex + "], polarity = " + polarity + " result: startIndex = " + analysisInitialIndex + " bound = " + bound + " (" + result + ")");
     if ((result.boundIndex - result.startIndex) * polarity < 0) {
       return null; // If the polarity is backwards it means we found overlapping duplication of a different length, and the current duplication is considered to be not interesting
     }
@@ -471,7 +475,7 @@ public class AncestryDetector implements ReferenceProvider {
       }
     }
     if (duplicationsAreNew) {
-      System.err.println("AncestryDetector processing " + this.duplicationsToProcess.size() + " duplications");
+      this.statusLogger.log("AncestryDetector processing " + this.duplicationsToProcess.size() + " duplications", true);
       if (logger.getEnabled()) {
         logger.log("AncestryDetector processing " + this.duplicationsToProcess.size() + " duplications");
         for (Duplication duplication: allDuplications) {
@@ -499,4 +503,5 @@ public class AncestryDetector implements ReferenceProvider {
   private boolean verifyNoDuplicateAnalyses;
 
   private boolean resultingDatabaseEnableGapmers = true;
+  private boolean resultingDatabaseVerifyConsistency = false;
 }

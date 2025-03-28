@@ -5,7 +5,7 @@ import java.util.HashSet;
 import java.lang.Iterable;
 import java.util.List;
 
-class Duplication {
+class Duplication implements Comparable<Duplication> {
   public Duplication(int length) {
     this.length = length;
     // disallow duplicate positions, which can happen occasionally if two gapped hashblocks have exactly the same start and end position
@@ -41,6 +41,22 @@ class Duplication {
       stringBuilder.append(",");
     }
     return stringBuilder.toString();
+  }
+
+  @Override
+  public int compareTo(Duplication other) {
+    if (this.length != other.length) {
+      return this.length - other.length;
+    }
+    if (this.startPositions.size() != other.startPositions.size()) {
+      return this.startPositions.size() - other.startPositions.size();
+    }
+    for (int i = 0; i < this.startPositions.size(); i++) {
+      int comparison = this.startPositions.get(i).compareTo(other.startPositions.get(i));
+      if (comparison != 0)
+        return comparison;
+    }
+    return 0;
   }
 
   private int length;

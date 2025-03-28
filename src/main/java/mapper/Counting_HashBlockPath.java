@@ -65,6 +65,7 @@ public class Counting_HashBlockPath {
       }
     }
     this.interestingMatch_history.add(queryBlock);
+    int queryBlockNumMatches = match.matches.length;
     for (SequencePosition referenceBlock: match.matches) {
       if (this.logger.getEnabled()) {
         int startIndex = referenceBlock.getStartIndex();
@@ -131,7 +132,7 @@ public class Counting_HashBlockPath {
 
         fullMatch = new SequenceMatch(query, currentMatchedSequence, currentLocalOffset);
       }
-      this.updateMatches(fullMatch, queryBlock);
+      this.updateMatches(fullMatch, queryBlock, queryBlockNumMatches);
     }
     if (queryBlock.getStartIndex() >= this.maxNonoverlappingBlockVisited) {
       this.maxNonoverlappingBlockVisited = queryBlock.getEndIndex();
@@ -153,10 +154,11 @@ public class Counting_HashBlockPath {
   private HashBlockMatch_Counter createCounter(Map<Integer, HashBlockMatch_Counter> map, int position, SequenceMatch match, HashBlock queryBlock) {
     HashBlockMatch_Counter counter = new HashBlockMatch_Counter(match, this.interestingMatch_history, this.numNonoverlappingBlocksVisited, queryBlock.getStartIndex());
     map.put(position, counter);
+    this.numMatchCounters++;
     return counter;
   }
 
-  private void updateMatches(SequenceMatch sequenceMatch, HashBlock queryBlock) {
+  private void updateMatches(SequenceMatch sequenceMatch, HashBlock queryBlock, int queryBlockNumMatches) {
     Sequence sequence = sequenceMatch.getSequenceB();
     int offset = sequenceMatch.getOffset();
     Map<Sequence, TreeMap<Integer, HashBlockMatch_Counter>> allMatchCounters;
@@ -201,10 +203,10 @@ public class Counting_HashBlockPath {
 
     HashBlockMatch_Counter previousCounter = currentCounter.getPreviousCounter();
     if (previousCounter != null)
-      this.addMatch(sequenceMatch, queryBlock, previousCounter);
+      this.addMatch(sequenceMatch, queryBlock, previousCounter, queryBlockNumMatches);
     HashBlockMatch_Counter nextCounter = currentCounter.getNextCounter();
     if (nextCounter != null)
-      this.addMatch(sequenceMatch, queryBlock, nextCounter);
+      this.addMatch(sequenceMatch, queryBlock, nextCounter, queryBlockNumMatches);
 
     // If we're already keeping track of nearby matches then we don't have to keep track of this one
     boolean updateThisOne = true;
@@ -214,25 +216,29 @@ public class Counting_HashBlockPath {
       }
     }
     if (updateThisOne)
-      this.addMatch(sequenceMatch, queryBlock, currentCounter);
+      this.addMatch(sequenceMatch, queryBlock, currentCounter, queryBlockNumMatches);
   }
 
-  private void addMatch(SequenceMatch fullMatch, HashBlock queryBlock, HashBlockMatch_Counter counter) {
+  private void addMatch(SequenceMatch fullMatch, HashBlock queryBlock, HashBlockMatch_Counter counter, int queryBlockNumMatches) {
     int currentCount;
     counter.addMatch(fullMatch, queryBlock);
     counter.update();
-    // once a counter has enough matches, we can consider it good
+    // once a counter has enough matches, we can consider it worth checking
     if (counter.getNumMatches() <= 2) {
+      // A reference position that is matched by multiple query blocks we consider to be worth checking
       if (counter.getNumMatches() == 2) {
         this.foundGoodMatchCounter = true;
         this.declareGood(counter);
       } else {
-        int distanceFromStart, distanceFromEnd;
-        distanceFromStart = fullMatch.getOffset();
-        distanceFromEnd = fullMatch.getSequenceB().getLength() - (fullMatch.getOffset() + fullMatch.getSequenceA().getLength());
-        int distanceFromEdge = Math.min(distanceFromStart, distanceFromEnd);
-        if (distanceFromEdge < 0) {
-          this.declareGood(counter);
+        // If a reference position is near the end of a contig, and the matching query block doesn't match many reference positions, then even one matching query block is enough to consider this reference position to be worth checking
+        if (queryBlockNumMatches <= queryBlock.getLength()) {
+          int distanceFromStart, distanceFromEnd;
+          distanceFromStart = fullMatch.getOffset();
+          distanceFromEnd = fullMatch.getSequenceB().getLength() - (fullMatch.getOffset() + fullMatch.getSequenceA().getLength());
+          int distanceFromEdge = Math.min(distanceFromStart, distanceFromEnd);
+          if (distanceFromEdge < 0) {
+            this.declareGood(counter);
+          }
         }
       }
     }
@@ -246,12 +252,12 @@ public class Counting_HashBlockPath {
     }
   }
 
-  // If we don't already have a hashblock match that we consider good, this function declares all of them to be good
+  // If we don't already have a hashblock match that we consider worth worth checking, and we don't have too many, then this function declares all of them worth checking
 
   // This function is more helpful for shorter queries with more mutations, and is more likely to trigger for those queries
-  // This function is more expensive for longer queries, but less likely to trigger for those queries
+  // This function is more expensive for longer queries, and less likely to trigger for those queries
   public void tryEnsureGoodMatchCounter() {
-    if (!this.foundGoodMatchCounter) {
+    if (!this.foundGoodMatchCounter && numMatchCounters <= this.query.getLength()) {
       if (this.logger.getEnabled()) {
         this.logger.log("declaring all matches to be good in an effort to try some lookups");
       }
@@ -485,6 +491,7 @@ public class Counting_HashBlockPath {
   List<HashBlock> interestingMatch_history = new ArrayList<HashBlock>();
   int numBlocksMatchingAnywhere;
   int numBlocksMatchingInTheSamePlace;
+  int numMatchCounters;
   SequenceDatabase sequenceDatabase;
   Sequence query;
   Sequence reverseComplementQuery;
