@@ -20,9 +20,10 @@ class AlignmentCache {
     return this.cache.size();
   }
 
-  public void addHits(int numHits) {
+  public void addHitsAndSkips(int numHits, int numSkips) {
     synchronized(this.statsLock) {
       this.numHits += numHits;
+      this.numSkips += numSkips;
     }
   }
 
@@ -30,7 +31,12 @@ class AlignmentCache {
     return this.numHits;
   }
 
+  public long getNumSkips() {
+    return this.numSkips;
+  }
+
   private ConcurrentHashMap<Query, QueryAlignments> cache = new ConcurrentHashMap<Query, QueryAlignments>();
   private Object statsLock = new Object();
   private long numHits;
+  private long numSkips;
 }

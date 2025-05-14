@@ -40,7 +40,6 @@ public class AlignerWorker extends Thread {
   }
 
   public void requestProcess(List<QueryBuilder> queries, long startMillis, long estimatedTotalNumQueries, Logger alignmentLogger, Logger referenceLogger) {
-    this.resetStatistics();
     this.estimatedTotalNumQueries = estimatedTotalNumQueries;
 
     this.startMillis = startMillis;
@@ -58,7 +57,7 @@ public class AlignerWorker extends Thread {
 
   private void resetStatistics() {
     numCacheHits = 0;
-    numCacheMisses = 0;
+    numCacheSkips = 0;
 
     slowestQuery = null;
     slowestAlignment = null;
@@ -116,18 +115,32 @@ public class AlignerWorker extends Thread {
     this.duplicationDetector.helpSetup();
   }
 
-  private void process() {
+  public void beforeBatch() {
+    this.resetStatistics();
+    updateNumHashCodesToCache();
+  }
 
-    // First figure out how often to enable the cache
+  public void afterBatch() {
+    this.resultsCache.addHitsAndSkips(this.numCacheHits, this.numCacheSkips);
+  }
+
+  private void updateNumHashCodesToCache() {
     // If we have evidence that the cache always works, then we want the cache to always be enabled.
     // If the cache has never worked, we want to enable it occasionally (n^(1/3) times) to double check whether it can work.
     // If we have no data, we want to enable the cache a little bit to check whether it can work.
 
     double numCacheHits = this.resultsCache.getNumHits();
+    double numCacheSkips = this.resultsCache.getNumSkips();
     double numSavedResults = this.resultsCache.getUsage();
     double estimatedNewNumSavedResults = numSavedResults + Math.pow(this.queries.size(), 1.0/3.0);
 
-    double cacheEnableFraction = (numCacheHits * numCacheHits + 1.0) / (estimatedNewNumSavedResults * estimatedNewNumSavedResults + 1);
+    double targetOverallCacheEnableFraction = (numCacheHits * numCacheHits + 1.0) / (estimatedNewNumSavedResults * estimatedNewNumSavedResults + 1);
+
+    // If the cache is actually being used less often than we want, we should enable it more often
+    double historicCacheEnableFraction = (double)Math.max(numSavedResults, 1) / (double)Math.max(numSavedResults + numCacheHits + numCacheSkips, 1);
+    double cacheEnableFraction = targetOverallCacheEnableFraction * (targetOverallCacheEnableFraction / historicCacheEnableFraction);
+
+
     if (cacheEnableFraction > 1)
       cacheEnableFraction = 1;
 
@@ -135,8 +148,15 @@ public class AlignerWorker extends Thread {
     this.maxHashcodeToCache = Integer.MIN_VALUE + numHashcodesToCache;
 
     if (logger.getEnabled()) {
-      logger.log("Num cache hits = " + numCacheHits + " num cache entries = " + numSavedResults + " num queries = " + this.queries.size() + "; cache enabled fraction = " + cacheEnableFraction + ", using cache for hashcodes up to " + this.maxHashcodeToCache);
+      logger.log("Num cache hits = " + numCacheHits + ", num cache entries = " + numSavedResults + ", num queries = " + this.queries.size() + ", num cache skips == " + numCacheSkips + "; cache enabled fraction = " + cacheEnableFraction + ", using cache for hashcodes up to " + this.maxHashcodeToCache);
     }
+  }
+
+  private void process() {
+    // First figure out how often to enable the cache
+    this.beforeBatch();
+
+    // Now check for queries to align
 
     if (this.queries.size() < 1) {
       // We're just supposed to help the HashBlock_Database hash its sequences
@@ -208,6 +228,7 @@ public class AlignerWorker extends Thread {
       }
       this.sendResults(alignments);
     }
+    this.afterBatch();
   }
 
   private int countNumIndels(List<QueryAlignment> alignmentOptions) {
@@ -239,12 +260,7 @@ public class AlignerWorker extends Thread {
 
   // checks the cache and aligns the query
   private QueryAlignments checkCacheAndAlign(Query query) {
-    int hashCode = query.hashCode();
-    if (hashCode > this.maxHashcodeToCache) {
-      // if the cache hasn't been doing well lately, we don't use it as much
-      return this.alignWithoutCache(query);
-    }
-    // If the cache seems useful then we use it more
+    // First check the cache
     QueryAlignments cached = this.resultsCache.get(query);
     if (cached != null) {
       // we currently only support reusing cache results for queries that don't split during alignment
@@ -255,11 +271,20 @@ public class AlignerWorker extends Thread {
         for (QueryAlignment option: firstComponent) {
           newComponent.add(option.withQuery(query));
         }
+        if (logger.getEnabled()) {
+          logger.log("reusing cached result");
+        }
         return new QueryAlignments(query, newComponent);
       }
     }
     QueryAlignments result = this.alignWithoutCache(query);
-    this.resultsCache.addAlignment(query, result);
+    int hashCode = query.hashCode();
+    if (hashCode <= this.maxHashcodeToCache) {
+      this.resultsCache.addAlignment(query, result);
+    } else {
+      // If the cache hasn't been very helpful lately, then we don't use it as much
+      this.numCacheSkips++;
+    }
     return result;
   }
 
@@ -620,7 +645,6 @@ public class AlignerWorker extends Thread {
     for (AlignmentListener listener : this.resultsListeners) {
       listener.addAlignments(results);
     }
-    this.resultsCache.addHits(this.numCacheHits);
   }
 
   public Query getSlowestQuery() {
@@ -675,7 +699,7 @@ public class AlignerWorker extends Thread {
   boolean failed = false;
   List<SequenceMatch> emptyMatchList = new ArrayList<SequenceMatch>(0);
   int numCacheHits;
-  int numCacheMisses;
+  int numCacheSkips;
   long numIndels;
 
   Query slowestQuery;
@@ -689,7 +713,7 @@ public class AlignerWorker extends Thread {
   long latestQueryAlignmentStart;
   int numCasesImmediatelyAcceptingFirstAlignment;
   Queue<AlignerWorker> completionListener;
-  List<QueryBuilder> queries;
+  List<QueryBuilder> queries = new ArrayList<QueryBuilder>(0);
 
   BlockingQueue<Boolean> workQueue = new ArrayBlockingQueue<Boolean>(1);
   AlignmentCache resultsCache;

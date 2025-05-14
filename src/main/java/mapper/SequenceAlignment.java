@@ -335,7 +335,7 @@ public class SequenceAlignment {
     } else {
       builder.append("Aligned ref  : " + alignedUnmutatedRef + "(" + alignment.getSequenceB().getName() + ", offset " + alignment.getStartOffset() + ")\n");
     }
-    builder.append("Penalty      : " + penalty + " (length: " + alignmentLength + ")\n");
+    builder.append("Penalty      : " + penalty + " (query length: " + query.getLength() + ")\n");
     return builder.toString();
   }
 

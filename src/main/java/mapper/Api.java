@@ -72,7 +72,10 @@ public class Api {
     AlignerWorker worker = new AlignerWorker(hashblockDatabase, parameters, duplicationDetector.getView(logger), 0, alignmentListeners, resultsCache, new ArrayDeque<AlignerWorker>());
     worker.setup();
     worker.setLogger(logger);
-    return worker.align(query).getAlignmentsForQuery(query);
+    worker.beforeBatch();
+    List<QueryAlignment> results = worker.align(query).getAlignmentsForQuery(query);
+    worker.afterBatch();
+    return results;
   }
 
   // This function aligns one query to one reference
