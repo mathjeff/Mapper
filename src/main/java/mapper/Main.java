@@ -36,9 +36,9 @@ public class Main {
 
   public static void main(String[] args) throws IllegalArgumentException, FileNotFoundException, IOException, InterruptedException {
     long startMillis = System.currentTimeMillis();
-    XMapperMetadata.setMainArguments(args);
+    MapperMetadata.setMainArguments(args);
 
-    outputWriter.write("X-Mapper version " + XMapperMetadata.getVersion());
+    outputWriter.write("X-Mapper version " + MapperMetadata.getVersion());
 
     // parse arguments
     List<String> referencePaths = new ArrayList<String>();
@@ -52,6 +52,9 @@ public class Main {
     boolean vcfIncludeNonMutations = true;
     boolean vcfShowSupportRead = true;
     String outRefsMapCountPath = null;
+    String outMutationsPath = null;
+    MutationDetectionParameters mutationFilterParameters = MutationDetectionParameters.defaultFilter();
+    MutationDetectionParameters vcfFilterParameters = MutationDetectionParameters.emptyFilter();
     int alignmentVerbosity = 0;
     int referenceVerbosity = 0;
     boolean allowNoOutput = false;
@@ -134,7 +137,40 @@ public class Main {
       }
       if ("--out-vcf".equals(arg)) {
         outVcfPath = args[i + 1];
-        i++;
+        i += 2;
+        while (i < args.length) {
+          arg = args[i];
+          if ("--snp-threshold".equals(arg)) {
+            vcfFilterParameters.minSNPTotalDepth = (float)Double.parseDouble(args[i + 1]);
+            vcfFilterParameters.minSNPDepthFraction = (float)Double.parseDouble(args[i + 2]);
+            i += 3;
+            continue;
+          }
+          if ("--indel-start-threshold".equals(arg)) {
+            vcfFilterParameters.minIndelTotalStartDepth = (float)Double.parseDouble(args[i + 1]);
+            vcfFilterParameters.minIndelStartDepthFraction = (float)Double.parseDouble(args[i + 2]);
+            i += 3;
+            continue;
+          }
+          if ("--indel-continue-threshold".equals(arg)) {
+            vcfFilterParameters.minIndelContinuationTotalDepth = (float)Double.parseDouble(args[i + 1]);
+            vcfFilterParameters.minIndelContinuationDepthFraction = (float)Double.parseDouble(args[i + 2]);
+            i += 3;
+            continue;
+          }
+          if ("--indel-threshold".equals(arg)) {
+            vcfFilterParameters.minIndelTotalStartDepth = (float)Double.parseDouble(args[i + 1]);
+            vcfFilterParameters.minIndelContinuationTotalDepth = (float)Double.parseDouble(args[i + 1]);
+
+            vcfFilterParameters.minIndelStartDepthFraction = (float)Double.parseDouble(args[i + 2]);
+            vcfFilterParameters.minIndelContinuationDepthFraction = (float)Double.parseDouble(args[i + 2]);
+            i += 3;
+            continue;
+          }
+          i--;
+          // maybe this argument is a top-level argument
+          break;
+        }
         continue;
       }
       if ("--out-sam".equals(arg)) {
@@ -150,6 +186,44 @@ public class Main {
       if ("--out-refs-map-count".equals(arg)) {
         outRefsMapCountPath = args[i + 1];
         i++;
+        continue;
+      }
+      if ("--out-mutations".equals(arg)) {
+        outMutationsPath = args[i + 1];
+        i += 2;
+        while (i < args.length) {
+          arg = args[i];
+          if ("--snp-threshold".equals(arg)) {
+            mutationFilterParameters.minSNPTotalDepth = (float)Double.parseDouble(args[i + 1]);
+            mutationFilterParameters.minSNPDepthFraction = (float)Double.parseDouble(args[i + 2]);
+            i += 3;
+            continue;
+          }
+          if ("--indel-start-threshold".equals(arg)) {
+            mutationFilterParameters.minIndelTotalStartDepth = (float)Double.parseDouble(args[i + 1]);
+            mutationFilterParameters.minIndelStartDepthFraction = (float)Double.parseDouble(args[i + 2]);
+            i += 3;
+            continue;
+          }
+          if ("--indel-continue-threshold".equals(arg)) {
+            mutationFilterParameters.minIndelContinuationTotalDepth = (float)Double.parseDouble(args[i + 1]);
+            mutationFilterParameters.minIndelContinuationDepthFraction = (float)Double.parseDouble(args[i + 2]);
+
+            i += 3;
+            continue;
+          }
+          if ("--indel-threshold".equals(arg)) {
+            mutationFilterParameters.minIndelTotalStartDepth = (float)Double.parseDouble(args[i + 1]);
+            mutationFilterParameters.minIndelContinuationTotalDepth = (float)Double.parseDouble(args[i + 1]);
+            mutationFilterParameters.minIndelStartDepthFraction = (float)Double.parseDouble(args[i + 2]);
+            mutationFilterParameters.minIndelContinuationDepthFraction = (float)Double.parseDouble(args[i + 2]);
+            i += 3;
+            continue;
+          }
+          i--;
+          // maybe this argument is a top-level argument
+          break;
+        }
         continue;
       }
       if ("--out-ancestor".equals(arg)) {
@@ -289,6 +363,10 @@ public class Main {
       if (arg.startsWith("-Xmx") || arg.startsWith("-Xms")) {
         usageError("" + arg + " is not an X-Mapper argument: try `java " + arg + " -jar <arguments>`");
       }
+      if ("--snp-threshold".equals(arg) || "--indel-start-threshold".equals(arg) || "--indel-continue-threshold".equals(arg) || "--indel-threshold".equals(arg)) {
+        usageError("" + arg + " is not a top-level argument: try --out-mutations <mutations.txt> " + arg + " <min total depth> <min supporting depth fraction>");
+      }
+
       usageError("Unrecognized argument: " + arg);
     }
     if (referencePaths.size() < 1) {
@@ -297,7 +375,7 @@ public class Main {
     if (queries.size() < 1) {
       usageError("--queries or --paired-queries is required");
     }
-    if (outVcfPath == null && outSamPath == null && outRefsMapCountPath == null && outUnalignedPath == null && !allowNoOutput) {
+    if (outVcfPath == null && outSamPath == null && outRefsMapCountPath == null && outUnalignedPath == null && outMutationsPath == null || allowNoOutput) {
       usageError("No output specified. Try --out-vcf <output path>, or if you really don't want to generate an output file, --no-output");
     }
     alignmentLogger = new Logger(outputWriter, 1, alignmentVerbosity);
@@ -363,7 +441,7 @@ public class Main {
     for (QueryProvider queryBuilder : queries) {
       outputWriter.write(queryBuilder.toString());
     }
-    boolean successful = run(referencePaths, queries, cacheDir, allowDuplicateContigNames, outVcfPath, vcfIncludeNonMutations, vcfShowSupportRead, outSamPath, outRefsMapCountPath, outUnalignedPath, parameters, numThreads, queryEndFraction, autoVerbose, guessReferenceAncestors, outAncestorPath, enableGapmers, verifyConsistentDatabase, startMillis);
+    boolean successful = run(referencePaths, queries, cacheDir, allowDuplicateContigNames, outVcfPath, vcfIncludeNonMutations, vcfShowSupportRead, outSamPath, outRefsMapCountPath, outMutationsPath, mutationFilterParameters, vcfFilterParameters, outUnalignedPath, parameters, numThreads, queryEndFraction, autoVerbose, guessReferenceAncestors, outAncestorPath, enableGapmers, verifyConsistentDatabase, startMillis);
     if (successful)
       System.exit(0);
     else
@@ -374,9 +452,8 @@ public class Main {
     outputWriter.write(
 "\n" +
 "Usage:\n"+
-"  java -jar x-mapper.jar [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --queries <queries.fastq> [options]\n" +
-"\n" +
-"  java -jar x-mapper.jar [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --paired-queries [--spacing <expected> <distancePerPenalty>]<queries.fastq> <queries2.fastq> [options]\n" +
+"  java -jar x-mapper.jar [--out-mutations <out.txt>] [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --queries <queries.fastq> [options]\n" +
+"  java -jar x-mapper.jar [--out-mutations <out.txt>] [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --paired-queries <queries.fastq> [--spacing <expected> <distancePerPenalty> ] [options]\n" +
 "\n" +
 "    Aligns genomic sequences quickly and accurately using relatively high amounts of memory\n" +
 "\n" +
@@ -414,12 +491,42 @@ public class Main {
 "\n" +
 "  OUTPUT FORMATS:\n" +
 "\n" +
-"    Summary by position\n" +
+"    Summary by reference position\n" +
 "\n" +
 "      --out-vcf <file> output file to generate containing a description of mutation counts by position\n" +
+"        Details about the file format are included in the top of the file\n" +
 "      --vcf-exclude-non-mutations if set, the output vcf file will exclude positions where no mutations were detected\n" +
 "      --vcf-omit-support-reads By default, the vcf file has a column showing one or more supporting reads for each variant. If set, the output vcf file will hide the supporting reads for each variant.\n" +
 "      --distinguish-query-ends <fraction> (default 0.1) In the output vcf file, we separately display which queries aligned at each position with <fraction> of the end of the query and which didn't.\n" +
+"      --snp-threshold <min total depth> <min supporting depth fraction> (default 0, 0)\n" +
+"        The minimum total depth and minimum supporting depth fraction required at a position to report the support for the mutation\n" +
+"\n" +
+"      --indel-start-threshold <min total depth> <min supporting depth fraction> (default 0, 0)\n" +
+"        The minimum total (middle) depth and minimum supporting depth fraction required at a position to report support for the start of an insertion or deletion\n" +
+"\n" +
+"      --indel-continue-threshold <min total depth> <min supporting depth fraction> (default 0, 0)\n" +
+"        The minimum total (middle) depth and minimum supporting depth fraction required at a position to report support for a continuation of an insertion or deletion\n" +
+"      --indel-threshold <min total depth> <min supporting depth fraction>\n" +
+"        Alias for --indel-start-threshold <min total depth> <min supporting depth frequency> and --indel-continue-threshold <min total depth> <min supporting depth frequency>\n" +
+"\n" +
+"\n" +
+"    Summary by mutation\n" +
+"\n" +
+"      --out-mutations <file> output file to generate listing the mutations of the queries compared to the reference genome\n" +
+"        Details about the file format are included in the top of the file\n" +
+"\n" +
+"      --distinguish-query-ends <fraction> (default 0.1) When detecting indels, only consider the middle <fraction> of each query\n" +
+"\n" +
+"      --snp-threshold <min total depth> <min supporting depth fraction> (default 5, 0.9)\n" +
+"        The minimum total depth and minimum supporting depth fraction required at a position to report it as a point mutation\n" +
+"\n" +
+"      --indel-start-threshold <min total depth> <min supporting depth fraction> (default 1, 0.8)\n" +
+"        The minimum total (middle) depth and minimum supporting depth fraction required at a position to report it as the start of an insertion or deletion\n" +
+"\n" +
+"      --indel-continue-threshold <min total depth> <min supporting depth fraction> (default 1, 0.7)\n" +
+"        The minimum total (middle) depth and minimum supporting depth fraction required at a position to report it as a continuation of an insertion or deletion\n" +
+"      --indel-threshold <min total depth> <min supporting depth fraction>\n" +
+"        Alias for --indel-start-threshold <min total depth> <min supporting depth frequency> and --indel-continue-threshold <min total depth> <min supporting depth frequency>\n" +
 "\n" +
 "    Summary by genome\n" +
 "\n" +
@@ -503,7 +610,7 @@ public class Main {
   }
 
   // performs alignment and outputs results
-  public static boolean run(List<String> referencePaths, List<QueryProvider> queriesList, File cacheDir, boolean allowDuplicateContigNames, String outVcfPath, boolean vcfIncludeNonMutations, boolean vcfShowSupportRead, String outSamPath, String outRefsMapCountPath, String outUnalignedPath, AlignmentParameters parameters, int numThreads, double queryEndFraction, boolean autoVerbose, boolean guessReferenceAncestors, String outAncestorPath, boolean enableGapmers, boolean verifyConsistentDatabase, long startMillis) throws IllegalArgumentException, FileNotFoundException, IOException, InterruptedException {
+  public static boolean run(List<String> referencePaths, List<QueryProvider> queriesList, File cacheDir, boolean allowDuplicateContigNames, String outVcfPath, boolean vcfIncludeNonMutations, boolean vcfShowSupportRead, String outSamPath, String outRefsMapCountPath, String outMutationsPath, MutationDetectionParameters mutationFilterParameters, MutationDetectionParameters vcfFilterParameters, String outUnalignedPath, AlignmentParameters parameters, int numThreads, double queryEndFraction, boolean autoVerbose, boolean guessReferenceAncestors, String outAncestorPath, boolean enableGapmers, boolean verifyConsistentDatabase, long startMillis) throws IllegalArgumentException, FileNotFoundException, IOException, InterruptedException {
     DirCache dirCache;
     if (cacheDir != null)
       dirCache = new DirCache(cacheDir, new StorageFilesystem());
@@ -512,7 +619,11 @@ public class Main {
 
     VcfWriter writer = null;
     if (outVcfPath != null)
-      writer = new VcfWriter(outVcfPath, vcfIncludeNonMutations, queryEndFraction, vcfShowSupportRead);
+      writer = new VcfWriter(outVcfPath, vcfIncludeNonMutations, vcfFilterParameters, queryEndFraction, vcfShowSupportRead);
+
+     MutationsWriter mutationsWriter = null;
+     if (outMutationsPath != null)
+       mutationsWriter = new MutationsWriter(outMutationsPath, mutationFilterParameters);
 
     outputWriter.write("Loading reference");
     boolean keepQualityData = (outUnalignedPath != null);
@@ -565,7 +676,7 @@ public class Main {
       listeners.add(referenceAlignmentCounter);
     }
     AlignmentCounter matchCounter = new AlignmentCounter();
-    if (outVcfPath != null) {
+    if (outVcfPath != null || outMutationsPath != null) {
       listeners.add(matchDatabase);
     }
     PenaltySummarizer penaltySummarizer = new PenaltySummarizer(parameters);
@@ -636,6 +747,14 @@ public class Main {
         displayCoverage = "<1%";
       }
       displayCoverage = " Coverage                      : " + displayCoverage + " of the reference (" + numMatchedPositions + "/" + numPositions + ") was matched";
+    }
+    if (outMutationsPath != null) {
+      Map<Sequence, Alignments> alignments = matchDatabase.groupByPosition();
+      long computationEnd = System.currentTimeMillis();
+      double computationTime = (double)(computationEnd - startMillis) / 1000.0;
+      outputWriter.write("Writing mutation results at " + computationTime + "s");
+      mutationsWriter.write(alignments, numThreads);
+      outputWriter.write("Saved " + outMutationsPath);
     }
     // show statistics
     outputWriter.write("");

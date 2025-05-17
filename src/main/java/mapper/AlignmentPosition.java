@@ -11,21 +11,22 @@ public class AlignmentPosition {
     this.referenceBase = referenceBase;
   }
 
-  public void putScaled(char value, int scaledWeight, boolean forward, boolean nearQueryEnd) {
-    AlignmentPosition_DirectionCounts container;
-    if (forward) {
-      if (nearQueryEnd) {
-        container = this.forwardEndCounts;
-      } else {
-        container = this.forwardMiddleCounts;
-      }
-    } else {
-     if (nearQueryEnd) {
-        container = this.reverseEndCounts;
-      } else {
-        container = this.reverseMiddleCounts;
-      }
+  public void ignoreAlternate(char value) {
+    if (value != this.referenceBase) {
+      this.ignoreAlternate(value, false, false);
+      this.ignoreAlternate(value, false, true);
+      this.ignoreAlternate(value, true, false);
+      this.ignoreAlternate(value, true, true);
     }
+  }
+
+  private void ignoreAlternate(char value, boolean forward, boolean nearQueryEnd) {
+    AlignmentPosition_DirectionCounts container = getContainer(forward, nearQueryEnd);
+    container.ignoreAlternate(value);
+  }
+
+  public void putScaled(char value, int scaledWeight, boolean forward, boolean nearQueryEnd) {
+    AlignmentPosition_DirectionCounts container = getContainer(forward, nearQueryEnd);
 
     if (this.referenceBase == value) {
       container.putScaledReference(scaledWeight);
@@ -33,6 +34,25 @@ public class AlignmentPosition {
       container.putScaledAlternate(value, scaledWeight);
     }
   }
+
+  private AlignmentPosition_DirectionCounts getContainer(boolean forward, boolean nearQueryEnd) {
+    AlignmentPosition_DirectionCounts container;
+    if (forward) {
+      if (nearQueryEnd) {
+        return this.forwardEndCounts;
+      } else {
+        return this.forwardMiddleCounts;
+      }
+    } else {
+     if (nearQueryEnd) {
+        return this.reverseEndCounts;
+      } else {
+        return this.reverseMiddleCounts;
+      }
+    }
+  }
+
+
 
   public void putSampleAlternateSequence(Sequence querySequence, int index, boolean isDeletion) {
     char alternate;
@@ -75,6 +95,21 @@ public class AlignmentPosition {
     return mostPopular;
   }
 
+  public char getMostPopularAlternate() {
+    float maxCount = 0;
+    char mostPopular = ' ';
+    if (this.hasAlternates()) {
+      for (int i = 0; i < getAllKeys().length; i++) {
+        float count = this.getAlternateCount(i);
+        if (count > maxCount || i == 0) {
+          maxCount = count;
+          mostPopular = this.keyForIndex(i);
+        }
+      }
+    }
+    return mostPopular;
+  }
+
   public String getCounts(char b, boolean isQueryEnd) {
     Float forwardMiddleCount, forwardEndCount, reverseMiddleCount, reverseEndCount;
     if (this.referenceBase == b) {
@@ -101,7 +136,29 @@ public class AlignmentPosition {
     return builder.toString();
   }
 
-  private String formatNumber(float number) {
+  private float getReferenceCount(boolean forward, boolean nearQueryEnd) {
+    if (forward) {
+      if (nearQueryEnd)
+        return this.forwardEndCounts.getReferenceCount();
+      else
+        return this.reverseEndCounts.getReferenceCount();
+    } else {
+      if (nearQueryEnd)
+        return this.forwardMiddleCounts.getReferenceCount();
+      else
+        return this.reverseMiddleCounts.getReferenceCount();
+    }
+  }
+
+  public float getMiddleReferenceCount() {
+    return this.forwardMiddleCounts.getReferenceCount() + this.reverseMiddleCounts.getReferenceCount();
+  }
+
+  public float getEndReferenceCount() {
+    return this.forwardEndCounts.getReferenceCount() + this.reverseEndCounts.getReferenceCount();
+  }
+
+  public static String formatNumber(float number) {
     int rounded = (int)number;
     if (rounded == number) {
       return Integer.toString(rounded);
@@ -111,6 +168,7 @@ public class AlignmentPosition {
 
   public float getCount() {
     float total = this.getReferenceCount();
+    total += this.getIgnoredAlternateCount();
     if (this.hasAlternates()) {
       for (int i = 0; i < this.getAllKeys().length; i++) {
         total += this.getAlternateCount(i);
@@ -123,12 +181,65 @@ public class AlignmentPosition {
     return formatNumber(getCount());
   }
 
-  private float getReferenceCount() {
+  public float getReferenceCount() {
     return this.forwardMiddleCounts.getReferenceCount() + this.forwardEndCounts.getReferenceCount() + this.reverseMiddleCounts.getReferenceCount() + this.reverseEndCounts.getReferenceCount();
+  }
+
+  private float getIgnoredAlternateCount() {
+    return this.forwardMiddleCounts.getIgnoredAlternateCount() + this.forwardEndCounts.getIgnoredAlternateCount() + this.reverseMiddleCounts.getIgnoredAlternateCount() + this.reverseEndCounts.getIgnoredAlternateCount();
+  }
+
+  public float getMiddleCount() {
+    float total = this.getMiddleReferenceCount();
+    total += getMiddleIgnoredAlternateCount();
+    if (this.hasAlternates()) {
+      for (int i = 0; i < this.getAllKeys().length; i++) {
+        total += this.getMiddleAlternateCount(i);
+      }
+    }
+    return total;
+  }
+
+  private float getMiddleIgnoredAlternateCount() {
+    return this.forwardMiddleCounts.getIgnoredAlternateCount() + this.reverseMiddleCounts.getIgnoredAlternateCount();
+  }
+
+  public float getEndCount() {
+    float total = this.getEndReferenceCount();
+    if (this.hasAlternates()) {
+      for (int i = 0; i < this.getAllKeys().length; i++) {
+        total += this.getEndAlternateCount(i);
+      }
+    }
+    return total;
+  }
+
+  public String formatAlternateCount(char c) {
+    return formatNumber(getAlternateCount(c));
+  }
+
+  public float getAlternateCount(char c) {
+    return getAlternateCount(indexForKey(c));
   }
 
   private float getAlternateCount(int index) {
     return this.forwardMiddleCounts.getAlternateCount(index) + this.forwardEndCounts.getAlternateCount(index) + this.reverseMiddleCounts.getAlternateCount(index) + this.reverseEndCounts.getAlternateCount(index);
+  }
+
+  public float getMiddleAlternateCount(char c) {
+    return getMiddleAlternateCount(indexForKey(c));
+  }
+
+  public float getMiddleAlternateCount(int index) {
+    return this.forwardMiddleCounts.getAlternateCount(index) + this.reverseMiddleCounts.getAlternateCount(index);
+  }
+
+  public float getEndAlternateCount(char c) {
+    return getEndAlternateCount(indexForKey(c));
+  }
+
+  public float getEndAlternateCount(int index) {
+    return this.forwardEndCounts.getAlternateCount(index) + this.reverseEndCounts.getAlternateCount(index);
   }
 
   public boolean hasAlternates() {
@@ -137,6 +248,10 @@ public class AlignmentPosition {
 
   private boolean hasAlternate(int index) {
     return this.forwardMiddleCounts.hasAlternate(index) || this.forwardEndCounts.hasAlternate(index) || this.reverseMiddleCounts.hasAlternate(index) || this.reverseEndCounts.hasAlternate(index);
+  }
+
+  public char[] getNonzeroAlternates() {
+    return getNonzeroAlternates(getReference());
   }
 
   public char[] getNonzeroAlternates(char reference) {

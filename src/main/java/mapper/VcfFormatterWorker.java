@@ -27,7 +27,7 @@ public class VcfFormatterWorker extends Thread {
     this.outputBuilder = new StringBuilder();
     boolean showSupportRead = this.showSupportRead;
     String sequenceName = formatRequest.sequence.getName();
-    Alignments bases = formatRequest.alignments;
+    FilteredAlignments bases = formatRequest.alignments;
     int endIndex = formatRequest.startIndex + formatRequest.length;
     for (int i = formatRequest.startIndex; i < endIndex; i++) {
       AlignmentPosition frequencies = bases.getPosition(i);

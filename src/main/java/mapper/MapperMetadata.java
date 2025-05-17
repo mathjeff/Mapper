@@ -9,17 +9,17 @@ import java.util.Properties;
 import java.lang.management.ManagementFactory;
 
 // Returns metadata about Mapper
-public class XMapperMetadata {
+public class MapperMetadata {
 
-  // The version of X-Mapper that is running
+  // The version of Mapper that is running
   public static String getVersion() {
     Properties properties = new Properties();
     try {
-      properties.load(XMapperMetadata.class.getResourceAsStream("/x-mapper.properties"));
+      properties.load(MapperMetadata.class.getResourceAsStream("/mapper.properties"));
     } catch (IOException e) {
       throw new RuntimeException("Failed to get X-Mapper version", e);
     }
-    String version = properties.getProperty("xmapper.version", "unknown");
+    String version = properties.getProperty("mapper.version", "unknown");
     return version;
   }
 
@@ -27,19 +27,23 @@ public class XMapperMetadata {
   // This might not get the correct filepath for java
   // This might not get exactly the correct filepath of the X-Mapper jar
   public static String guessCommandLine() {
+    String[] mainArguments = getMainArguments();
+    if (mainArguments == null)
+      return "unknown";
+
     String javaArgumentsString = String.join(" ", getJavaArguments());
     Path mapperJarPath = getXMapperPath();
     Path workingDirPath = new File(".").toPath();
 
     Path simplifiedXMapperPath = simplifyPath(mapperJarPath, workingDirPath);
 
-    String mainArgumentsString = String.join(" ", getMainArguments());
+    String mainArgumentsString = String.join(" ", mainArguments);
     return "java " + javaArgumentsString + " -jar " + simplifiedXMapperPath + " " + mainArgumentsString;
   }
 
   private static Path getXMapperPath() {
     try {
-      File mapperJar = new File(XMapperMetadata.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+      File mapperJar = new File(MapperMetadata.class.getProtectionDomain().getCodeSource().getLocation().toURI());
       return mapperJar.toPath();
     } catch (URISyntaxException e) {
       throw new RuntimeException(e);

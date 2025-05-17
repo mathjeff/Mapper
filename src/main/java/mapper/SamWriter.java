@@ -31,8 +31,8 @@ public class SamWriter implements AlignmentListener {
   }
 
   private void writeInvocationDetails() {
-    String version = XMapperMetadata.getVersion();
-    String invocation = XMapperMetadata.guessCommandLine();
+    String version = MapperMetadata.getVersion();
+    String invocation = MapperMetadata.guessCommandLine();
     this.writeLine("@PG\tID:x-mapper\tPN:x-mapper\tVN:" + version + "\tCL:\"" + invocation + "\"");
   }
 

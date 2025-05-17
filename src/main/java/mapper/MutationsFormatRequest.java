@@ -1,7 +1,7 @@
 package mapper;
 
-class VcfFormatRequest {
-  public VcfFormatRequest(Sequence sequence, int startIndex, int length, FilteredAlignments alignments, int jobIndex) {
+class MutationsFormatRequest {
+  public MutationsFormatRequest(Sequence sequence, int startIndex, int length, FilteredAlignments alignments, int jobIndex) {
     this.sequence = sequence;
     this.startIndex = startIndex;
     this.length = length;
@@ -14,9 +14,4 @@ class VcfFormatRequest {
   public int length;
   public FilteredAlignments alignments;
   public int jobIndex;
-
-  @Override
-  public String toString() {
-    return "VcfFormatRequest " + jobIndex + " on " + sequence.getName() + " at " + startIndex + " length " + length;
-  }
 }

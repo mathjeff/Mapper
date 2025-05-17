@@ -46,7 +46,7 @@ task release(type: Copy) {
 }
 
 def expandProperties = new HashMap<String, String>()
-expandProperties["xmapperVersion"] = gitVersion
+expandProperties["mapperVersion"] = gitVersion
 project.tasks["processResources"].configure { processTask ->
   processTask.expand(expandProperties)
   processTask.inputs.property("properties", expandProperties)

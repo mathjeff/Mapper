@@ -8,25 +8,54 @@ public class AlignmentPosition_DirectionCounts {
   private static int listScale = 100;
 
   public void putScaledReference(float weight) {
-    this.referenceCount += weight;
+    this.referenceCount = (int)weight;
+  }
+
+  public int getScaledReference() {
+    return this.referenceCount;
   }
 
   public void putScaledAlternate(char value, int scaledWeight) {
-    if (scaledWeight == 0)
-      return;
     if (this.counts == null) {
+      if (scaledWeight == 0)
+        return;
       this.counts = this.newList();
     }
     int index = indexForKey(value);
     this.counts[index] = scaledWeight;
   }
 
+  public int getScaledAlternate(char value) {
+    if (this.counts == null)
+      return 0;
+    int index = indexForKey(value);
+    return getScaledAlternate(index);
+  }
+
+  public int getScaledAlternate(int index) {
+    if (this.counts == null)
+      return 0;
+    return this.counts[index];
+  }
+
+  public void ignoreAlternate(char value) {
+    int alternateCount = this.getScaledAlternate(value);
+    putScaledAlternate(value, 0);
+    this.ignoredAlternateCount += alternateCount;
+  }
+
   public boolean hasAlternates() {
-    return this.counts != null;
+    if (this.counts == null)
+      return false;
+    for (int i = 0; i < this.counts.length; i++) {
+      if (this.counts[i] != 0)
+        return true;
+    }
+    return false;
   }
 
   public float getAlternateCount(int index) {
-    return this.listGet(this.counts, index);
+    return ((float)getScaledAlternate(index)) / listScale;
   }
   public float getAlternateCount(char value) {
     int index = this.indexForKey(value);
@@ -39,6 +68,10 @@ public class AlignmentPosition_DirectionCounts {
 
   public float getReferenceCount() {
     return (float)(this.referenceCount) / listScale;
+  }
+
+  public float getIgnoredAlternateCount() {
+    return (float)(this.ignoredAlternateCount) / listScale;
   }
 
   public static char[] getAllKeys() {
@@ -69,19 +102,6 @@ public class AlignmentPosition_DirectionCounts {
     return getAllKeys()[index];
   }
 
-  // treats null lists as empty and then does an index lookup and scales the value
-  private float listGet(Integer[] list, int index) {
-    if (list == null) {
-      return 0;
-    }
-    return ((float)list[index]) / listScale;
-  }
-  private void listSet(Integer[] list, int index, float value) {
-    list[index] = (int)(value * listScale);
-  }
-  private void listAdd(Integer[] list, int index, float value) {
-    listSet(list, index, listGet(list, index) + value);
-  }
   private Integer[] newList() {
     int numAltKeys = getAllKeys().length;
     Integer[] list = new Integer[numAltKeys];
@@ -93,6 +113,8 @@ public class AlignmentPosition_DirectionCounts {
 
   // The number of items we have that match the reference
   private int referenceCount;
+  // The number of items we have that don't match the reference but we've been asked to ignore
+  private int ignoredAlternateCount;
 
   // Lists of items that don't match the reference
   // List indices match this.makeKeys()

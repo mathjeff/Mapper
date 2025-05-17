@@ -1,6 +1,6 @@
 # X-Mapper: a fast, accurate aligner for genomic sequences
 
-Download the latest release version here: https://github.com/mathjeff/Mapper/releases/download/1.2.0-beta05/x-mapper-1.2.0-beta05.jar
+Download the latest release version here: https://github.com/mathjeff/Mapper/releases/download/1.2.0-beta06/x-mapper-1.2.0-beta06.jar
 
 Read about the algorithm, plus benchmarking and application in the publication here: https://genomebiology.biomedcentral.com/articles/10.1186/s13059-024-03473-7
 
@@ -10,9 +10,7 @@ Contact:\
  Dr. Anni Zhang, MIT, anniz44@mit.edu
 
 ## Usage:
-  java -jar x-mapper.jar [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --queries <queries.fastq> [options]
-
-  java -jar x-mapper.jar [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --paired-queries [--spacing <expected> <distancePerPenalty>]<queries.fastq> <queries2.fastq> [options]
+  java -jar x-mapper.jar [--out-mutations <out.txt>] [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --queries <queries.fastq> [options]
 
     Aligns genomic sequences quickly and accurately using relatively high amounts of memory
 
@@ -50,12 +48,42 @@ Contact:\
 
   OUTPUT FORMATS:
 
-    Summary by position
+    Summary by reference position
 
       --out-vcf <file> output file to generate containing a description of mutation counts by position
+        Details about the file format are included in the top of the file
       --vcf-exclude-non-mutations if set, the output vcf file will exclude positions where no mutations were detected
       --vcf-omit-support-reads By default, the vcf file has a column showing one or more supporting reads for each variant. If set, the output vcf file will hide the supporting reads for each variant.
       --distinguish-query-ends <fraction> (default 0.1) In the output vcf file, we separately display which queries aligned at each position with <fraction> of the end of the query and which didn't.
+      --snp-threshold <min total depth> <min supporting depth fraction> (default 0, 0)
+        The minimum total depth and minimum supporting depth fraction required at a position to report the support for the mutation
+
+      --indel-start-threshold <min total depth> <min supporting depth fraction> (default 0, 0)
+        The minimum total (middle) depth and minimum supporting depth fraction required at a position to report support for the start of an insertion or deletion
+
+      --indel-continue-threshold <min total depth> <min supporting depth fraction> (default 0, 0)
+        The minimum total (middle) depth and minimum supporting depth fraction required at a position to report support for a continuation of an insertion or deletion
+      --indel-threshold <min total depth> <min supporting depth fraction>
+        Alias for --indel-start-threshold <min total depth> <min supporting depth frequency> and --indel-continue-threshold <min total depth> <min supporting depth frequency>
+
+
+    Summary by mutation
+
+      --out-mutations <file> output file to generate listing the mutations of the queries compared to the reference genome
+        Details about the file format are included in the top of the file
+
+      --distinguish-query-ends <fraction> (default 0.1) When detecting indels, only consider the middle <fraction> of each query
+
+      --snp-threshold <min total depth> <min supporting depth fraction> (default 5, 0.9)
+        The minimum total depth and minimum supporting depth fraction required at a position to report it as a point mutation
+
+      --indel-start-threshold <min total depth> <min supporting depth fraction> (default 1, 0.8)
+        The minimum total (middle) depth and minimum supporting depth fraction required at a position to report it as the start of an insertion or deletion
+
+      --indel-continue-threshold <min total depth> <min supporting depth fraction> (default 1, 0.7)
+        The minimum total (middle) depth and minimum supporting depth fraction required at a position to report it as a continuation of an insertion or deletion
+      --indel-threshold <min total depth> <min supporting depth fraction>
+        Alias for --indel-start-threshold <min total depth> <min supporting depth frequency> and --indel-continue-threshold <min total depth> <min supporting depth frequency>
 
     Summary by genome
 
