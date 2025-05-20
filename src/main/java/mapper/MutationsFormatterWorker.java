@@ -52,7 +52,7 @@ public class MutationsFormatterWorker extends Thread {
         deletions.add(frequencies);
       } else {
         if (deletions.size() > 0) {
-          int deletionDisplayIndex = displayIndex - (deletions.size() - 1);
+          int deletionDisplayIndex = displayIndex - deletions.size();
           writeDeletions(sequenceName, deletionDisplayIndex, deletions, stringBuilder);
           deletions.clear();
         }

@@ -83,7 +83,7 @@ public class MutationsWriter_Test {
     String mutations = buildMutations(query, ref);
 
     String expectedMutations =
-        "ref	8	AG	--	1	1\n" +
+        "ref	7	AG	--	1	1\n" +
         "";
 
     checkMutations(mutations, expectedMutations);
