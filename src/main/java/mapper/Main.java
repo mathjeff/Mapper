@@ -375,7 +375,7 @@ public class Main {
     if (queries.size() < 1) {
       usageError("--queries or --paired-queries is required");
     }
-    if (outVcfPath == null && outSamPath == null && outRefsMapCountPath == null && outUnalignedPath == null && outMutationsPath == null || allowNoOutput) {
+    if (outVcfPath == null && outSamPath == null && outRefsMapCountPath == null && outUnalignedPath == null && outMutationsPath == null && !allowNoOutput) {
       usageError("No output specified. Try --out-vcf <output path>, or if you really don't want to generate an output file, --no-output");
     }
     alignmentLogger = new Logger(outputWriter, 1, alignmentVerbosity);
