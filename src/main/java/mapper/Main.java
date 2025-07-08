@@ -613,7 +613,7 @@ public class Main {
   public static boolean run(List<String> referencePaths, List<QueryProvider> queriesList, File cacheDir, boolean allowDuplicateContigNames, String outVcfPath, boolean vcfIncludeNonMutations, boolean vcfShowSupportRead, String outSamPath, String outRefsMapCountPath, String outMutationsPath, MutationDetectionParameters mutationFilterParameters, MutationDetectionParameters vcfFilterParameters, String outUnalignedPath, AlignmentParameters parameters, int numThreads, double queryEndFraction, boolean autoVerbose, boolean guessReferenceAncestors, String outAncestorPath, boolean enableGapmers, boolean verifyConsistentDatabase, long startMillis) throws IllegalArgumentException, FileNotFoundException, IOException, InterruptedException {
     DirCache dirCache;
     if (cacheDir != null)
-      dirCache = new DirCache(cacheDir, new StorageFilesystem());
+      dirCache = new DirCache(cacheDir, StorageFilesystem.Instance);
     else
       dirCache = null;
 

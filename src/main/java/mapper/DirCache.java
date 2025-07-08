@@ -24,7 +24,7 @@ public class DirCache {
     File currentDir = this.rootDir;
 
     // This shouldn't take long, so we avoid running it in parallel to make it simpler
-    synchronized(this) {
+    synchronized(this.filesystem) {
       for (String hash: hashes) {
         if (tryWriteMetadata(propertiesBytes, currentDir)) {
           // We just wrote this metadata into this dir

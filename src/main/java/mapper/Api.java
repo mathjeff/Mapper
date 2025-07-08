@@ -1,5 +1,6 @@
 package mapper;
 
+import java.io.File;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -31,6 +32,18 @@ public class Api {
 
   // Constructs a ReferenceDatabase representing the given sequences (plus their reverse complements).
   public static ReferenceDatabase newDatabase(Map<String, String> referencesByName, Logger logger) {
+    return newDatabase(referencesByName, null, logger);
+  }
+
+  // Constructs a ReferenceDatabase representing the given sequences (plus their reverse complements)
+  // Processing the reference sequences is made faster using the given cache directory, if possible
+  // Subsequent query alignments don't currently make use of the cache directory but that might change in the future
+  public static ReferenceDatabase newDatabase(Map<String, String> referencesByName, File cacheDir, Logger logger) {
+    DirCache dirCache;
+    if (cacheDir != null)
+      dirCache = new DirCache(cacheDir, StorageFilesystem.Instance);
+    else
+      dirCache = null;
     long startMillis = System.currentTimeMillis();
     List<Sequence> referenceSequences = new ArrayList<Sequence>();
     for (Map.Entry<String, String> entry: referencesByName.entrySet()) {
@@ -44,13 +57,13 @@ public class Api {
     }
     SequenceDatabase refSequences = new SequenceDatabase(referenceSequences);
     StatusLogger statusLogger = new StatusLogger(logger, startMillis);
-    HashBlock_Database hashblockDatabase = new HashBlock_Database(refSequences, statusLogger);
+    HashBlock_Database hashblockDatabase = new HashBlock_Database(refSequences, dirCache, statusLogger);
 
     AlignmentCache resultsCache = new AlignmentCache();
 
     int minDuplicationLength = DuplicationDetector.chooseMinDuplicationLength(refSequences);
     int maxDuplicationLength = DuplicationDetector.chooseMaxDuplicationLength(refSequences);
-    DuplicationDetector duplicationDetector = new DuplicationDetector(hashblockDatabase, minDuplicationLength, maxDuplicationLength, 2, 1, null, statusLogger);
+    DuplicationDetector duplicationDetector = new DuplicationDetector(hashblockDatabase, minDuplicationLength, maxDuplicationLength, 2, 1, dirCache, statusLogger);
 
     return new ReferenceDatabase(hashblockDatabase, duplicationDetector, resultsCache);
   }

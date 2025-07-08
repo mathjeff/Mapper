@@ -9,6 +9,11 @@ import java.nio.file.Paths;
 
 // A StorageFilesystem passes requests along to the actual filesystem
 public class StorageFilesystem implements Filesystem {
+  public static StorageFilesystem Instance = new StorageFilesystem();
+
+  private StorageFilesystem() {
+  }
+
   public boolean createNewFile(File file) throws IOException {
     file.getParentFile().mkdirs();
     return file.createNewFile();

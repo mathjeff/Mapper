@@ -27,6 +27,10 @@ public class HashBlock_Database implements ReferenceProvider {
     this.initialize(sequences, -1, -1, -1, true, null, statusLogger, false);
   }
 
+  public HashBlock_Database(SequenceDatabase sequences, DirCache dirCache, StatusLogger statusLogger) {
+    this.initialize(sequences, -1, -1, -1, true, dirCache, statusLogger, false);
+  }
+
   public HashBlock_Database(SequenceDatabase sequences, int minInterestingSize, int hintMaxInterestingSize, int maxNumShortMatches, boolean enableGapmers, DirCache dirCache, StatusLogger statusLogger) {
     this.initialize(sequences, minInterestingSize, hintMaxInterestingSize, maxNumShortMatches, enableGapmers, dirCache, statusLogger, false);
   }
