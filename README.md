@@ -158,6 +158,8 @@ Contact:\
       Currently what we save here is most of our analyses of the reference genomes (information relating to --infer-ancestors is not currently saved).
       You may specify the same <dir> for multiple executions; data is actually stored in an appropriate subdirectory.
 
+To try an example, see examples/test.sh
+
 To make changes to X-Mapper, see [DEVELOPING.md](DEVELOPING.md)
 
 ## If you're working on a bioinformatics project and would be interested in some consulting help, check out our website at https://genomiverse.net/ !

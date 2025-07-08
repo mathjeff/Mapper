@@ -1,0 +1,12 @@
+>query1-matches
+AAAACCAAAGG
+>query2-1SNP
+AAAACCAAATG
+>query3-matches
+ACGTAC
+>query4-insertion
+AAAACCCAAAGG
+>query5-deletion
+CCGGTTAAACCCGGTTTAAAACCCC
+>query6-too-different
+ACGCGCTAAACCGAGG
