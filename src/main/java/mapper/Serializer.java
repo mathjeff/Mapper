@@ -10,7 +10,9 @@ import java.util.zip.GZIPOutputStream;
 // It doesn't worry about making sure the written data can still be read by a future version of the code, because we don't need that
 public class Serializer {
   public Serializer(File file) throws IOException {
-    this.outputStream = new BufferedOutputStream(new GZIPOutputStream(new FileOutputStream(file)));
+    this.outputFile = file;
+    this.tempOutputFile = new File(file.toString() + ".tmp");
+    this.outputStream = new BufferedOutputStream(new GZIPOutputStream(new FileOutputStream(tempOutputFile)));
   }
 
   public void writeBytesAndLength(byte[] data) throws IOException {
@@ -40,7 +42,10 @@ public class Serializer {
 
   public void close() throws IOException {
     this.outputStream.close();
+    this.tempOutputFile.renameTo(this.outputFile);
   }
 
   private BufferedOutputStream outputStream;
+  private File outputFile;
+  private File tempOutputFile;
 }
