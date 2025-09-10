@@ -84,7 +84,7 @@ public class SamWriter implements AlignmentListener {
     this.writeComment(" Alignment quality:");
     this.writeComment("  Let P represent the probability that the alignment position does not correspond to the biologically closest ancestor.");
     this.writeComment("  Alignment quality is an estimate of -10 * log(P) / log(10), rounded to the nearest integer, or 255 if unavailable.");
-    this.writeComment("  In this version of X-Mapper, we estimate this value using this model:");
+    this.writeComment("  In this version of Mapper, we estimate this value using this model:");
     this.writeComment("   0 if another alignment was found for this query with less penalty than this one");
     this.writeComment("   255 otherwise");
     this.writeComment("");

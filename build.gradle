@@ -37,6 +37,24 @@ dependencies {
   }
 }
 
+def helpOutput = new ByteArrayOutputStream()
+task updateHelp(type: Exec) {
+  dependsOn("assemble")
+  commandLine(["java", "-jar", "build/libs/x-mapper.jar", "--help"])
+  standardOutput = helpOutput
+  errorOutput = helpOutput
+  doLast {
+    project.file("build/help.txt").write(helpOutput.toString())
+  }
+}
+
+task updateReadme(type: Exec) {
+  dependsOn("updateHelp")
+  workingDir "${project.projectDir}/util"
+
+  commandLine(["bash", "-c", "./updateReadme.sh"])
+}
+
 task release(type: Copy) {
   from "build/libs"
   include "x-mapper.jar"
@@ -44,6 +62,7 @@ task release(type: Copy) {
   rename("x-mapper.jar", "x-mapper-${gitVersion}.jar")
   dependsOn("build")
 }
+tasks["build"].dependsOn("updateReadme")
 
 def expandProperties = new HashMap<String, String>()
 expandProperties["mapperVersion"] = gitVersion

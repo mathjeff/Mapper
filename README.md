@@ -1,16 +1,18 @@
 # X-Mapper: a fast, accurate aligner for genomic sequences
 
-Download the latest release version here: https://github.com/mathjeff/Mapper/releases/download/1.2.0-beta10/x-mapper-1.2.0-beta10.jar
+Download the latest release version here: https://github.com/mathjeff/Mapper/releases/download/1.2.0-beta11/x-mapper-1.2.0-beta11.jar
 
 Read about the algorithm, plus benchmarking and application in the publication here: https://genomebiology.biomedcentral.com/articles/10.1186/s13059-024-03473-7
 
 If you already have aligned sequences and just want to identify genetic variants, see [QuickVariants](https://github.com/caozhichongchong/QuickVariants).
 
 Contact:\
- Dr. Anni Zhang, MIT, anniz44@mit.edu
+ Dr. Anni Zhang, caozhichongchong at gmail dot com
 
-## Usage:
+## Usage of X-Mapper (abbr. Mapper):
   java -jar x-mapper.jar [--out-mutations <out.txt>] [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --queries <queries.fastq> [options]
+
+  java -jar x-mapper.jar [--out-mutations <out.txt>] [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --paired-queries <queries.fastq> [--spacing <expected> <distancePerPenalty> ] [options]
 
     Aligns genomic sequences quickly and accurately using relatively high amounts of memory
 
@@ -150,7 +152,7 @@ Contact:\
 
       For example, to start with 200 megabytes and increase up to 4 gigabytes as needed, do this
 
-        java -Xms200m -Xmx4g -jar x-mapper.jar <other x-mapper arguments>
+        java -Xms200m -Xmx4g -jar x-mapper.jar <other X-Mapper arguments>
 
     --num-threads <count> number of threads to use at once for processing. Higher values will run more quickly on a system that has that many CPUs available.
 
@@ -158,7 +160,15 @@ Contact:\
       Currently what we save here is most of our analyses of the reference genomes (information relating to --infer-ancestors is not currently saved).
       You may specify the same <dir> for multiple executions; data is actually stored in an appropriate subdirectory.
 
-To try an example, see examples/test.sh
+    --help output this help message
+      If no other arguments are given, exit instead of attempting an alignment
+
+    --version output the version of X-Mapper
+      If no other arguments are given, exit instead of attempting an alignment
+
+To try a simple example, see examples/test.sh
+
+To see more demos, see https://github.com/mathjeff/Mapper-Demos
 
 To make changes to X-Mapper, see [DEVELOPING.md](DEVELOPING.md)
 

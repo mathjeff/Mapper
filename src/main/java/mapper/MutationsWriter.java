@@ -86,7 +86,6 @@ public class MutationsWriter {
       Sequence sequence = entry.getValue();
       Alignments alignmentsHere = alignments.get(sequence);
       FilteredAlignments filteredAlignments = new FilteredAlignments(alignmentsHere, this.parameters);
-      System.err.println("MutationsWriter filtering with parameters min snp total depth " + this.parameters.minSNPTotalDepth);
       int startIndex = 0;
       while (startIndex < sequence.getLength()) {
         int jobSize = Math.min(maxJobSize, Math.max(1, (jobs.size() + 1) / numParallelJobs * maxJobSize));

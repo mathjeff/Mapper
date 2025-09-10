@@ -38,7 +38,7 @@ public class Main {
     long startMillis = System.currentTimeMillis();
     MapperMetadata.setMainArguments(args);
 
-    outputWriter.write("X-Mapper version " + MapperMetadata.getVersion());
+    outputWriter.write("Mapper version " + MapperMetadata.getVersion());
 
     // parse arguments
     List<String> referencePaths = new ArrayList<String>();
@@ -72,14 +72,25 @@ public class Main {
     int maxNumMatches = Integer.MAX_VALUE;
     double max_penaltySpan = -1;
 
-    int numThreads = 1;
+    int numThreadsRequested = 0;
     double queryEndFraction = 0.1;
     int splitQueriesPastSize = -1;
 
     boolean hasPairedQueriesWithoutSpecifyingSpacing = false;
+    boolean requestedAlignment = false; // whether the user requested doing an alignment (including implicitly requesting it)
 
     for (int i = 0; i < args.length; i++) {
       String arg = args[i];
+      if ("--version".equals(arg)) {
+        // We already output the version above, so there's no need to output it again here
+        continue;
+      }
+      if ("--help".equals(arg)) {
+        outputUsage();
+        continue;
+      }
+      // If the user specifies an argument that doesn't refer to a non-alignment action, then the user wants us to do alignment
+      requestedAlignment = true;
       if ("--reference".equals(arg)) {
         referencePaths.add(args[i + 1]);
         i++;
@@ -330,7 +341,10 @@ public class Main {
       }
       if ("--num-threads".equals(arg)) {
         String value = args[i + 1];
-        numThreads = Integer.parseInt(value);
+        numThreadsRequested = Integer.parseInt(value);
+        if (numThreadsRequested < 1) {
+          usageError("--num-threads must be >= 1");
+        }
         i++;
         continue;
       }
@@ -361,13 +375,21 @@ public class Main {
         usageError("--spacing is not a top-level argument: try --paired-queries <queries> <queries2> --spacing <expected> <distancePerPenalty>");
       }
       if (arg.startsWith("-Xmx") || arg.startsWith("-Xms")) {
-        usageError("" + arg + " is not an X-Mapper argument: try `java " + arg + " -jar <arguments>`");
+        usageError("" + arg + " is not a Mapper argument: try `java " + arg + " -jar <arguments>`");
       }
       if ("--snp-threshold".equals(arg) || "--indel-start-threshold".equals(arg) || "--indel-continue-threshold".equals(arg) || "--indel-threshold".equals(arg)) {
         usageError("" + arg + " is not a top-level argument: try --out-mutations <mutations.txt> " + arg + " <min total depth> <min supporting depth fraction>");
       }
 
       usageError("Unrecognized argument: " + arg);
+    }
+    if (args.length == 0) {
+      // If a user didn't specify an arguments, they probably want to do an alignment (and probably want to see help about doing an alignment)
+      requestedAlignment = true;
+    }
+    if (!requestedAlignment) {
+      // If the user doesn't want to do an alignment, we can stop now
+      return;
     }
     if (referencePaths.size() < 1) {
       usageError("--reference is required");
@@ -398,9 +420,6 @@ public class Main {
     }
     if (maxNumMatches < 1) {
       usageError("--max-num-matches must be >= 1");
-    }
-    if (numThreads < 1) {
-      usageError("--num-threads must be >= 1");
     }
     if (queryEndFraction < 0 || queryEndFraction >= 1) {
       usageError("--distinguish-query-ends must be >= 0 and < 1");
@@ -441,18 +460,19 @@ public class Main {
     for (QueryProvider queryBuilder : queries) {
       outputWriter.write(queryBuilder.toString());
     }
-    boolean successful = run(referencePaths, queries, cacheDir, allowDuplicateContigNames, outVcfPath, vcfIncludeNonMutations, vcfShowSupportRead, outSamPath, outRefsMapCountPath, outMutationsPath, mutationFilterParameters, vcfFilterParameters, outUnalignedPath, parameters, numThreads, queryEndFraction, autoVerbose, guessReferenceAncestors, outAncestorPath, enableGapmers, verifyConsistentDatabase, startMillis);
+    boolean successful = run(referencePaths, queries, cacheDir, allowDuplicateContigNames, outVcfPath, vcfIncludeNonMutations, vcfShowSupportRead, outSamPath, outRefsMapCountPath, outMutationsPath, mutationFilterParameters, vcfFilterParameters, outUnalignedPath, parameters, numThreadsRequested, queryEndFraction, autoVerbose, guessReferenceAncestors, outAncestorPath, enableGapmers, verifyConsistentDatabase, startMillis);
     if (successful)
       System.exit(0);
     else
       System.exit(1);
   }
 
-  public static void usageError(String message) {
+  public static void outputUsage() {
     outputWriter.write(
 "\n" +
-"Usage:\n"+
+"Usage of X-Mapper (abbr. Mapper):\n"+
 "  java -jar x-mapper.jar [--out-mutations <out.txt>] [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --queries <queries.fastq> [options]\n" +
+"\n" +
 "  java -jar x-mapper.jar [--out-mutations <out.txt>] [--out-vcf <out.vcf>] [--out-sam <out.sam>] [--out-refs-map-count <counts.txt>] [--out-unaligned <unaligned.fastq>] --reference <ref.fasta> --paired-queries <queries.fastq> [--spacing <expected> <distancePerPenalty> ] [options]\n" +
 "\n" +
 "    Aligns genomic sequences quickly and accurately using relatively high amounts of memory\n" +
@@ -473,7 +493,7 @@ public class Main {
 "        That additional penalty equals (the difference between the actual distance and <expected>) divided by <distancePerPenalty>, unless the two query sequence alignments would overlap, in which case the additional penalty is 0.\n" +
 "\n" +
 "    --infer-ancestors\n" +
-"      Requests that X-Mapper look for parts of the genome that likely shared a common ancestor in the past, and will lower the penalty of an alignment that mismatches the given reference but matches the inferred common ancestor.\n" +
+"      Requests that Mapper look for parts of the genome that likely shared a common ancestor in the past, and will lower the penalty of an alignment that mismatches the given reference but matches the inferred common ancestor.\n" +
 "    --no-infer-ancestors\n" +
 "      Disables ancestor inference.\n" +
 "\n" +
@@ -481,7 +501,7 @@ public class Main {
 "      THIS OPTION IS A TEMPORARY EXPERIMENT FOR LONG READS TO DETECT REARRANGEMENTS AND IMPROVE PERFORMANCE.\n" +
 "\n" +
 "    --no-gapmers\n" +
-"      When X-Mapper attempts to identify locations at which the query might align to the reference, X-Mapper first splits the query into smaller pieces and looks for an exact match for each piece.\n" +
+"      When Mapper attempts to identify locations at which the query might align to the reference, Mapper first splits the query into smaller pieces and looks for an exact match for each piece.\n" +
 "      By default, these pieces contain noncontiguous basepairs and might look like XXXXXXXX____XXXX.\n" +
 "      This flag makes these pieces be contiguous instead to look more like XXXXXXXXXXXX.\n" +
 "      THIS OPTION IS A TEMPORARY EXPERIMENT FOR TESTING THE PERFORMANCE OF GAPMERS.\n" +
@@ -568,7 +588,7 @@ public class Main {
 "    --max-penalty <fraction> (default 0.1) for a match to be reported, its penalty must be no larger than this value times its length\n" +
 "      Setting this closer to 0 will run more quickly\n" +
 "\n" +
-"    --max-penalty-span <extraPenalty> (default --snp-penalty / 2) After X-Mapper finds an alignment having a certain penalty, X-Mapper will also look for and report alignments having penalties no more than <extraPenalty> additional penalty.\n" +
+"    --max-penalty-span <extraPenalty> (default --snp-penalty / 2) After Mapper finds an alignment having a certain penalty, Mapper will also look for and report alignments having penalties no more than <extraPenalty> additional penalty.\n" +
 "      To only report alignments having the minimum penalty, set this to 0.\n" +
 "\n" +
 "    Computing the penalty of a match:\n" +
@@ -589,28 +609,40 @@ public class Main {
 "\n" +
 "  OTHER:\n" +
 "\n" +
-"    Memory usage: to control the amount of memory that Java makes available to X-Mapper, give the appropriate arguments to Java:\n" +
+"    Memory usage: to control the amount of memory that Java makes available to Mapper, give the appropriate arguments to Java:\n" +
 "\n" +
 "      -Xmx<amount> set <amount> as the maximum amount of memory to use.\n" +
 "      -Xms<amount> set <amount> as the initial amount of memory to use.\n" +
 "\n" +
 "      For example, to start with 200 megabytes and increase up to 4 gigabytes as needed, do this\n" +
 "\n" +
-"        java -Xms200m -Xmx4g -jar x-mapper.jar <other x-mapper arguments>\n" +
+"        java -Xms200m -Xmx4g -jar x-mapper.jar <other Mapper arguments>\n" +
 "\n" +
 "    --num-threads <count> number of threads to use at once for processing. Higher values will run more quickly on a system that has that many CPUs available.\n" +
 "\n" +
 "    --cache-dir <dir> save and load analyses from this directory to save time.\n" +
 "      Currently what we save here is most of our analyses of the reference genomes (information relating to --infer-ancestors is not currently saved).\n" +
-"      You may specify the same <dir> for multiple executions; data is actually stored in an appropriate subdirectory.\n"
+"      You may specify the same <dir> for multiple executions; data is actually stored in an appropriate subdirectory.\n" +
+"\n" +
+"    --help output this help message\n" +
+"      If no other arguments are given, exit instead of attempting an alignment\n" +
+"\n" +
+"    --version output the version of Mapper\n" +
+"      If no other arguments are given, exit instead of attempting an alignment\n" +
+""
 );
+  }
 
+
+  public static void usageError(String message) {
+    outputUsage();
     outputWriter.write(message);
     System.exit(1);
   }
 
   // performs alignment and outputs results
-  public static boolean run(List<String> referencePaths, List<QueryProvider> queriesList, File cacheDir, boolean allowDuplicateContigNames, String outVcfPath, boolean vcfIncludeNonMutations, boolean vcfShowSupportRead, String outSamPath, String outRefsMapCountPath, String outMutationsPath, MutationDetectionParameters mutationFilterParameters, MutationDetectionParameters vcfFilterParameters, String outUnalignedPath, AlignmentParameters parameters, int numThreads, double queryEndFraction, boolean autoVerbose, boolean guessReferenceAncestors, String outAncestorPath, boolean enableGapmers, boolean verifyConsistentDatabase, long startMillis) throws IllegalArgumentException, FileNotFoundException, IOException, InterruptedException {
+  public static boolean run(List<String> referencePaths, List<QueryProvider> queriesList, File cacheDir, boolean allowDuplicateContigNames, String outVcfPath, boolean vcfIncludeNonMutations, boolean vcfShowSupportRead, String outSamPath, String outRefsMapCountPath, String outMutationsPath, MutationDetectionParameters mutationFilterParameters, MutationDetectionParameters vcfFilterParameters, String outUnalignedPath, AlignmentParameters parameters, int numThreadsRequested, double queryEndFraction, boolean autoVerbose, boolean guessReferenceAncestors, String outAncestorPath, boolean enableGapmers, boolean verifyConsistentDatabase, long startMillis) throws IllegalArgumentException, FileNotFoundException, IOException, InterruptedException {
+    int numThreads = Math.max(1, numThreadsRequested);
     DirCache dirCache;
     if (cacheDir != null)
       dirCache = new DirCache(cacheDir, StorageFilesystem.Instance);
@@ -837,8 +869,9 @@ public class Main {
         else
           outputWriter.write("\n Add --cache-dir <dir> to cache the analysis of the reference genome");
       }
-
     }
+    if (numThreadsRequested == 0)
+      outputWriter.write("\n Add --num-threads <count> to process using multiple threads at once");
     String successStatus;
     boolean successful = (statistics != null);
     if (successful)
@@ -857,13 +890,13 @@ public class Main {
   }
 
   public static void dumpHeap() throws IOException {
-    String outputPath = "x-mapper.hprof";
+    String outputPath = "mapper.hprof";
     outputWriter.write("dumping heap to " + outputPath);
     MBeanServer server = ManagementFactory.getPlatformMBeanServer();
     HotSpotDiagnosticMXBean bean =
         ManagementFactory.newPlatformMXBeanProxy(server,
         "com.sun.management:type=HotSpotDiagnostic", HotSpotDiagnosticMXBean.class);
-    bean.dumpHeap("x-mapper.hprof", false);
+    bean.dumpHeap("mapper.hprof", false);
     outputWriter.write("dumped heap to " + outputPath);
   }
 
@@ -944,7 +977,7 @@ public class Main {
           int queryLength = queryBuilder.getLength();
           if (queryLength > warnReadsLongerThanLength) {
             if (!warnedNotOptimizedForLongReads) {
-              outputWriter.write("\n  Warning: Found read of length " + queryLength + ", longer than " + warnReadsLongerThanLength + ". This version of X-Mapper is not optimized for long reads. You may be interested in --split-queries-past-size\n");
+              outputWriter.write("\n  Warning: Found read of length " + queryLength + ", longer than " + warnReadsLongerThanLength + ". This version of Mapper is not optimized for long reads. You may be interested in --split-queries-past-size\n");
               warnedNotOptimizedForLongReads = true;
             }
           }

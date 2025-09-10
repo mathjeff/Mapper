@@ -81,26 +81,28 @@ public class AlignerWorker extends Thread {
 
   @Override
   public void run() {
-    this.setup();
-    while (true) {
-      boolean succeeded = false;
-      Boolean moreWork = false;
-      try {
-        moreWork = this.workQueue.take();
-      } catch (InterruptedException e) {
-        if (this.logger.getEnabled())
-          this.logger.log("Interrupted");
-        break;
-      }
-      if (!moreWork)
-        break;
-      try {
+    boolean succeeded = false;
+    try {
+      this.setup();
+      while (true) {
+        Boolean moreWork = false;
+        try {
+          moreWork = this.workQueue.take();
+        } catch (InterruptedException e) {
+          if (this.logger.getEnabled())
+            this.logger.log("Interrupted");
+          break;
+        }
+        if (!moreWork)
+          break;
         this.process();
-        succeeded = true;
-      } finally {
-        // record error if any
-        if (!succeeded)
-          this.failed = true;
+        this.completionListener.add(this);
+      }
+      succeeded = true;
+    } finally {
+      // record error if any
+      if (!succeeded) {
+        this.failed = true;
         this.completionListener.add(this);
       }
     }

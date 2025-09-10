@@ -17,31 +17,31 @@ public class MapperMetadata {
     try {
       properties.load(MapperMetadata.class.getResourceAsStream("/mapper.properties"));
     } catch (IOException e) {
-      throw new RuntimeException("Failed to get X-Mapper version", e);
+      throw new RuntimeException("Failed to get Mapper version", e);
     }
     String version = properties.getProperty("mapper.version", "unknown");
     return version;
   }
 
-  // A guess of the command line used to run X-Mapper
+  // A guess of the command line used to run Mapper
   // This might not get the correct filepath for java
-  // This might not get exactly the correct filepath of the X-Mapper jar
+  // This might not get exactly the correct filepath of the Mapper jar
   public static String guessCommandLine() {
     String[] mainArguments = getMainArguments();
     if (mainArguments == null)
       return "unknown";
 
     String javaArgumentsString = String.join(" ", getJavaArguments());
-    Path mapperJarPath = getXMapperPath();
+    Path mapperJarPath = getMapperPath();
     Path workingDirPath = new File(".").toPath();
 
-    Path simplifiedXMapperPath = simplifyPath(mapperJarPath, workingDirPath);
+    Path simplifiedMapperPath = simplifyPath(mapperJarPath, workingDirPath);
 
     String mainArgumentsString = String.join(" ", mainArguments);
-    return "java " + javaArgumentsString + " -jar " + simplifiedXMapperPath + " " + mainArgumentsString;
+    return "java " + javaArgumentsString + " -jar " + simplifiedMapperPath + " " + mainArgumentsString;
   }
 
-  private static Path getXMapperPath() {
+  private static Path getMapperPath() {
     try {
       File mapperJar = new File(MapperMetadata.class.getProtectionDomain().getCodeSource().getLocation().toURI());
       return mapperJar.toPath();
