@@ -18,13 +18,15 @@ echo "# X-Mapper: a fast, accurate aligner for genomic sequences
 grep "Download the latest release version here" "$destReadme" >> "$tempReadme"
 
 # finish header
-echo "
+echo '
+Also available as `x-mapper` in Bioconda - see https://bioconda.github.io/recipes/x-mapper/README.html
+
 Read about the algorithm, plus benchmarking and application in the publication here: https://genomebiology.biomedcentral.com/articles/10.1186/s13059-024-03473-7
 
 If you already have aligned sequences and just want to identify genetic variants, see [QuickVariants](https://github.com/caozhichongchong/QuickVariants).
 
-Contact:\\
- Dr. Anni Zhang, caozhichongchong at gmail dot com" >> "$tempReadme"
+Contact:\
+ Dr. Anni Zhang, caozhichongchong at gmail dot com' >> "$tempReadme"
 
 # write usage
 # remove line feed characters

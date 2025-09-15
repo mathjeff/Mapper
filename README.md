@@ -2,6 +2,8 @@
 
 Download the latest release version here: https://github.com/mathjeff/Mapper/releases/download/1.2.0/x-mapper-1.2.0.jar
 
+Also available as `x-mapper` in Bioconda - see https://bioconda.github.io/recipes/x-mapper/README.html
+
 Read about the algorithm, plus benchmarking and application in the publication here: https://genomebiology.biomedcentral.com/articles/10.1186/s13059-024-03473-7
 
 If you already have aligned sequences and just want to identify genetic variants, see [QuickVariants](https://github.com/caozhichongchong/QuickVariants).
