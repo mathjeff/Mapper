@@ -118,6 +118,7 @@ public class PathAligner {
     }
 
     if (this.textBLength >= this.textALength) {
+      // check for initial deletions
       double startingInsertionStartPenalty = parameters.getStartingInsertionStartPenalty();
       if (!this.mayQueryExtendPastEndOfReference)
         startingInsertionStartPenalty = disallowed;
@@ -140,10 +141,11 @@ public class PathAligner {
     if (this.mayQueryExtendPastEndOfReference) {
       double startingInsertionStartPenalty = parameters.getStartingInsertionStartPenalty();
       // check for initial insertions
-      int initialInsertionCount = (int)(alignmentAnalysis.maxInsertionExtensionPenalty / parameters.InsertionExtension_Penalty);
-      for (int i = 0; i < initialInsertionCount; i++) {
+      int initialInsertionCount = (int)(alignmentAnalysis.maxInsertionExtensionPenalty / parameters.DeletionExtension_Penalty);
+      for (int i = 1; i < initialInsertionCount; i++) {
         int xa = startX + i * this.stepDelta;
-        this.putNode(new AlignmentNode(xa, startY, 0, startingInsertionStartPenalty, disallowed, false, false));
+        double penalty = i * parameters.UnalignedPenalty;
+        this.putNode(new AlignmentNode(xa, startY, penalty, disallowed, disallowed, false, false));
       }
     }
 
@@ -155,9 +157,6 @@ public class PathAligner {
         this.outputDiagnostics();
       }
       this.activePenalty = this.priorities.poll();
-      /*if (this.logger.getEnabled()) {
-        this.logger.log("Processing penalty " + this.activePenalty);
-      }*/
       List<AlignmentNode> nodes = this.prioritizedNodes.get(this.activePenalty);
       for (int i = 0; i < nodes.size(); i++) {
         numSteps++;
@@ -178,12 +177,11 @@ public class PathAligner {
         }
 
         // If we reached the end of the query section or of the reference, we're done
-        if (x == goalX || (y == goalY && mayQueryExtendPastEndOfReference)) {
+        if (x == goalX) {
           maybeOutputDiagnostics();
           lastNode = node;
           if (logger.getEnabled()) {
             logger.log("PathAligner found an answer at " + x + ", " + y + " after " + numSteps + " steps");
-            //logger.log("estimated overall penalty of last node is " + estimateOverallPenalty(lastNode) + ", node reached diagonal = " + node.getReachedDiagonal() + ", actual penalty = " + node.getPenalty());
           }
           break;
         }
@@ -453,11 +451,6 @@ public class PathAligner {
 
     int numQueryPositionsChecked = x;
     int numAlignedBasepairs = Math.min(Math.abs(x - this.startX), Math.abs(y - this.startY));
-    double penaltyOfOnlyMutations = numAlignedBasepairs * this.parameters.MutationPenalty;
-    if (currentPenalty > penaltyOfOnlyMutations) {
-      // There shouldn't be a large indel near the edge of the query, because it should be cheaper to just have a few mutations instead
-      return;
-    }
 
     double estimatedTotalPenalty = this.estimateOverallPenalty(node);
 
@@ -597,8 +590,8 @@ public class PathAligner {
 
     if (left != null) {
       if (y == goalY && mayQueryExtendPastEndOfReference) {
-        // reached the end of the reference, so insertions are treated as ambiguities instead
-        insertXPenalty = left.getPenalty() + parameters.AmbiguityPenalty;
+        // reached the end of the reference, so insertions are treated as unaligned instead
+        insertXPenalty = left.getPenalty() + parameters.UnalignedPenalty;
       } else {
         boolean newInsertionAllowed = true;
         if (newInsertionAllowed) {

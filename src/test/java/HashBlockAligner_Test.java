@@ -91,6 +91,7 @@ public class HashBlockAligner_Test {
     parameters.MaxErrorRate = 0.1;
     parameters.MaxNumMatches = 1;
     parameters.AmbiguityPenalty = 0.1;
+    parameters.UnalignedPenalty = parameters.AmbiguityPenalty;
     return parameters;
   }
 }

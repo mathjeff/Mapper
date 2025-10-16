@@ -61,6 +61,7 @@ public class PathAligner_Test {
     parameters.DeletionExtension_Penalty = 1;
     parameters.MaxErrorRate = 1;
     parameters.AmbiguityPenalty = 0.1;
+    parameters.UnalignedPenalty = parameters.AmbiguityPenalty;
     return parameters;
   }
 }

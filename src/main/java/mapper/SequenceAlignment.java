@@ -186,7 +186,7 @@ public class SequenceAlignment {
     if (this.sections.size() > 0) {
       AlignedBlock firstBlock = this.sections.get(0);
       int unalignedQueryLength = firstBlock.getSequenceA().getLength() - alignedQueryLength;
-      double unalignedPenalty = (double)unalignedQueryLength * parameters.AmbiguityPenalty;
+      double unalignedPenalty = (double)unalignedQueryLength * parameters.UnalignedPenalty;
       totalPenalty += unalignedPenalty;
     }
     this.penalty = totalPenalty;

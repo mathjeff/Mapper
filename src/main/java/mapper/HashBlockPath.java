@@ -214,7 +214,7 @@ public class HashBlockPath {
       return 5;
     } else {
       // We might not be able to merge this hashblock to the right
-      return block.getNumBasepairsUsed();
+      return block.getNumBasepairsUsed() + 1;
     }
   }
 

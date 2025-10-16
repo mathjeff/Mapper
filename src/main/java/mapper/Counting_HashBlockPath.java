@@ -93,25 +93,55 @@ public class Counting_HashBlockPath {
       int numMismatchedItems = 0;
       int numMatchedItems = 0;
       // do a brief check to try to skip non-matching positions (hash collisions)
-      for (int middleIndexOffset = -3; middleIndexOffset <= queryBlock.getLength() + 3; middleIndexOffset++) {
-        if (middleIndexOffset >= 0 && middleIndexOffset <= queryBlock.getLength())
-          middleIndexOffset += queryBlock.getLength() + 1;
-        int queryIndex = queryBlock.getStartIndex() + middleIndexOffset;
-        if (queryIndex < 0 || queryIndex >= query.getLength())
-          continue;
-        int referenceIndex = referenceBlock.getStartIndex() + middleIndexOffset;
-        if (referenceIndex < 0 || referenceIndex >= currentMatchedSequence.getLength())
-          continue;
-        byte encodedQueryChar = this.query.encodedCharAt(queryIndex);
-        byte encodedRefChar = currentMatchedSequence.encodedCharAt(referenceIndex);
-        if (!Basepairs.canMatch(encodedQueryChar, encodedRefChar)) {
-          if (logger.getEnabled()) {
-            logger.log("   checked basepair " + middleIndexOffset + " in query block: got " + Basepairs.decode(encodedQueryChar) + " in query and " + Basepairs.decode(encodedRefChar) + " in reference");
+      for (int distance = 1; distance < 20; distance++) {
+        int checkOffset;
+        int queryIndex;
+
+        // check basepairs to the left of the hashblock
+        checkOffset = -distance;
+        queryIndex = queryBlock.getStartIndex() + checkOffset;
+        if (queryIndex >= 0 && queryIndex < query.getLength()) {
+          int referenceIndex = referenceBlock.getStartIndex() + checkOffset;
+          if (referenceIndex >= 0 && referenceIndex < currentMatchedSequence.getLength()) {
+            byte encodedQueryChar = this.query.encodedCharAt(queryIndex);
+            byte encodedRefChar = currentMatchedSequence.encodedCharAt(referenceIndex);
+            if (!Basepairs.canMatch(encodedQueryChar, encodedRefChar)) {
+              if (logger.getEnabled()) {
+                logger.log("   checked basepair " + checkOffset + " in query block: got " + Basepairs.decode(encodedQueryChar) + " in query and " + Basepairs.decode(encodedRefChar) + " in reference");
+              }
+              // Query block detected as different from reference block (hash collision). Skipping
+              numMismatchedItems++;
+            } else {
+              numMatchedItems++;
+            }
           }
-          // Query block detected as different from reference block (hash collision). Skipping
-          numMismatchedItems++;
-        } else {
-          numMatchedItems++;
+        }
+  
+        // check basepairs to the right of the hashblock
+        checkOffset = queryBlock.getLength() + distance;
+        queryIndex = queryBlock.getStartIndex() + checkOffset;
+        if (queryIndex >= 0 && queryIndex < query.getLength()) {
+          int referenceIndex = referenceBlock.getStartIndex() + checkOffset;
+          if (referenceIndex >= 0 && referenceIndex < currentMatchedSequence.getLength()) {
+            byte encodedQueryChar = this.query.encodedCharAt(queryIndex);
+            byte encodedRefChar = currentMatchedSequence.encodedCharAt(referenceIndex);
+            if (!Basepairs.canMatch(encodedQueryChar, encodedRefChar)) {
+              if (logger.getEnabled()) {
+                logger.log("   checked basepair " + checkOffset + " in query block: got " + Basepairs.decode(encodedQueryChar) + " in query and " + Basepairs.decode(encodedRefChar) + " in reference");
+              }
+              // Query block detected as different from reference block (hash collision). Skipping
+              numMismatchedItems++;
+            } else {
+              numMatchedItems++;
+            }
+          }
+        }
+
+        if (numMatchedItems < numMismatchedItems) {
+          break; // probably not a match
+        }
+        if (numMatchedItems >= numMismatchedItems + 4) {
+          break; // probably a match
         }
       }
       if (numMismatchedItems > numMatchedItems) {

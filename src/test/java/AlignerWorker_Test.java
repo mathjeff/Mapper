@@ -740,6 +740,8 @@ public class AlignerWorker_Test {
   }
 
   private List<QueryAlignment> align(Query query, String referenceText, AlignmentParameters parameters) {
+    if (referenceText.length() <= 1000)
+      System.err.println("Aligning to " + referenceText);
     return Api.alignOnce(query, referenceText, parameters, new Logger(new StderrWriter()));
   }
 
