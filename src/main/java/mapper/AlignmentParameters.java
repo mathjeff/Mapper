@@ -36,6 +36,13 @@ public class AlignmentParameters {
     return InsertionStart_Penalty;
   }
 
+  public double getMinPossibleNonzeroPenalty() {
+    double result = this.MutationPenalty;
+    result = Math.min(result, this.getStartingInsertionStartPenalty() + this.InsertionStart_Penalty);
+    result = Math.min(result, this.DeletionStart_Penalty + this.DeletionExtension_Penalty);
+    return result;
+  }
+
   public AlignmentParameters clone() {
     AlignmentParameters result = new AlignmentParameters();
 

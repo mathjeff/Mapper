@@ -1,6 +1,6 @@
 # X-Mapper: a fast, accurate aligner for genomic sequences
 
-Download the latest release version here: https://github.com/mathjeff/Mapper/releases/download/1.2.1-beta01/x-mapper-1.2.1-beta01.jar
+Download the latest release version here: https://github.com/mathjeff/Mapper/releases/download/1.2.1-beta02/x-mapper-1.2.1-beta02.jar
 
 Also available as `x-mapper` in Bioconda - see https://bioconda.github.io/recipes/x-mapper/README.html
 
@@ -40,12 +40,6 @@ Contact:\
 
     --split-queries-past-size <size> Any queries longer than <size> will be split into smaller queries.
       THIS OPTION IS A TEMPORARY EXPERIMENT FOR LONG READS TO DETECT REARRANGEMENTS AND IMPROVE PERFORMANCE.
-
-    --no-gapmers
-      When X-Mapper attempts to identify locations at which the query might align to the reference, X-Mapper first splits the query into smaller pieces and looks for an exact match for each piece.
-      By default, these pieces contain noncontiguous basepairs and might look like XXXXXXXX____XXXX.
-      This flag makes these pieces be contiguous instead to look more like XXXXXXXXXXXX.
-      THIS OPTION IS A TEMPORARY EXPERIMENT FOR TESTING THE PERFORMANCE OF GAPMERS.
 
     --allow-duplicate-contig-names if multiple contigs have the same name, continue instead of throwing an error.
       This can be confusing but shouldn't cause any incorrect results.

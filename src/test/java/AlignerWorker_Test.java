@@ -643,8 +643,8 @@ public class AlignerWorker_Test {
 
   @Test
   public void testCustomParameters() {
-    String queryText =     "ACGCACCTCTTTT";
-    String referenceText =  "CGCGACTCT";
+    String queryText =     "ACGCATCCTCTTTT";
+    String referenceText =  "CGCGTACTCT";
 
     Sequence querySequence = new SequenceBuilder().setName("query").add(queryText).build();
     Query query = new Query(querySequence);
@@ -664,8 +664,8 @@ public class AlignerWorker_Test {
 
     QueryAlignment alignment = alignments.get(0);
     String alignedB = alignment.getComponent(0).getAlignedTextB();
-    String expectedA = "CGCACCTCT";
-    String expectedB = "CGCGACTCT";
+    String expectedA = "CGCATCCTCT";
+    String expectedB = "CGCGTACTCT";
     if (!alignedB.equals(expectedB)) {
       fail("expected alignment of:\n" + expectedA + "\n" + expectedB + ", not\n" + alignment.format());
     }
@@ -692,6 +692,21 @@ public class AlignerWorker_Test {
     List<QueryAlignment> alignments = align(query, referenceText, parameters);
     QueryAlignment alignment = verifyOneAlignment(alignments);
     verifyAlignment(alignment.getComponent(0), queryPrefixMutated + repeat("-",  insertion.length()) + sharedSuffix);
+  }
+
+  @Test
+  public void test_maxPenaltySpan_with_perfectAlignment() {
+    String shared     = "AACCACAC";
+    String queryText  = shared + "AAAA";
+    String ref        = shared + "AAAA" + shared + "AAGA";
+    AlignmentParameters parameters = makeParameters();
+    parameters.Max_PenaltySpan = 1;
+    Query query = new Query(new SequenceBuilder().setName("query").add(queryText).build());
+    List<QueryAlignment> alignments = align(query, ref, parameters);
+    int expectedNumAlignments = 2;
+    if (alignments.size() != expectedNumAlignments) {
+      fail("Expected " + expectedNumAlignments + " alignments, got " + alignments.size());
+    }
   }
 
   private void doTestPairedEndQueries(boolean reverseQuerySequence2, int expectedNumMatches) {

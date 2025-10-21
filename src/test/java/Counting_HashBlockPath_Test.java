@@ -37,8 +37,8 @@ public class Counting_HashBlockPath_Test {
   }
 
   @Test
-  public void checkRepeatedHashblockMatchInsufficientEvenNearEndOfReference() {
-    String query     = "ACCC";
+  public void checkPoorAlignmentInsufficientEvenNearEndOfReference() {
+    String query     = "GGACCCGG";
     String reference = "ACCCACCCACCCACCCACCC";
 
     Counting_HashBlockPath path = makePath(query, reference);

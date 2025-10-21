@@ -518,12 +518,16 @@ public class AlignerWorker extends Thread {
     // logger.log("similarity detection granularity = " + similarityDetectionGranularity);
 
     // observed error rate
-    double numberOfMutations = optimisticBestAlignment.getPenalty() / parameters.MutationPenalty;
+    double penalty = optimisticBestAlignment.getPenalty();
+    double numberOfMutations = (penalty + this.parameters.Max_PenaltySpan) / parameters.MutationPenalty;
     // logger.log("number of mutations = " + numberOfMutations);
     double existingMutationRate = numberOfMutations / optimisticBestMatch.getQueryTotalLength();
     // logger.log("existing mutation rate = " + existingMutationRate);
-    if (existingMutationRate <= 0)
+    if (penalty <= 0 && this.parameters.Max_PenaltySpan < this.parameters.getMinPossibleNonzeroPenalty()) {
+      if (logger.getEnabled())
+        logger.log("alignment has no penalty so this is the best alignment");
       return true; // perfect score
+    }
 
     // the probability that a specific block in the similar section is not perfectly duplicated
     double probabilityMutationInSection = 1 - Math.pow(1 - existingMutationRate, similarityDetectionGranularity);

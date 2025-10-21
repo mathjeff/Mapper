@@ -15,6 +15,8 @@ import java.util.TreeMap;
 public class Counting_HashBlockPath {
   static long[] emptyList = new long[0];
 
+  private static int usualNumberOfMatchesRequiredBeforeInvestigating = 1;
+
   public Counting_HashBlockPath(HashBlock_Pyramid pyramid, Readable_HashBlock_Database database, SequenceDatabase sequenceDatabase, Sequence query, String queryShortName, Logger logger, AlignmentParameters alignmentParameters) {
     this.path = new HashBlockPath(pyramid, database, sequenceDatabase, query, logger.incrementScope(), queryShortName);
     this.pyramid = pyramid;
@@ -48,7 +50,7 @@ public class Counting_HashBlockPath {
         this.logger.log(this.queryShortName + " Counting_HashBlockPath done");
       }
       this.done = true;
-      if (this.numBlocksMatchingAnywhere < 2) {
+      if (this.numBlocksMatchingAnywhere < usualNumberOfMatchesRequiredBeforeInvestigating) {
         // If we only found one hashblock that matched anywhere, then the total number of matches of all of our hashblocks should be small
         // Also, the query itself should be small so it should be easy to check an individual alignment
         // So, if we only found one hashblock that matched anywhere, we allow checking for alignments at the places where it matched
@@ -118,7 +120,7 @@ public class Counting_HashBlockPath {
         }
   
         // check basepairs to the right of the hashblock
-        checkOffset = queryBlock.getLength() + distance;
+        checkOffset = queryBlock.getLength() - 1 + distance;
         queryIndex = queryBlock.getStartIndex() + checkOffset;
         if (queryIndex >= 0 && queryIndex < query.getLength()) {
           int referenceIndex = referenceBlock.getStartIndex() + checkOffset;
@@ -140,7 +142,7 @@ public class Counting_HashBlockPath {
         if (numMatchedItems < numMismatchedItems) {
           break; // probably not a match
         }
-        if (numMatchedItems >= numMismatchedItems + 4) {
+        if (numMatchedItems >= numMismatchedItems + queryBlock.getNumBasepairsUsed()) {
           break; // probably a match
         }
       }
@@ -254,9 +256,9 @@ public class Counting_HashBlockPath {
     counter.addMatch(fullMatch, queryBlock);
     counter.update();
     // once a counter has enough matches, we can consider it worth checking
-    if (counter.getNumMatches() <= 2) {
+    if (counter.getNumMatches() <= usualNumberOfMatchesRequiredBeforeInvestigating) {
       // A reference position that is matched by multiple query blocks we consider to be worth checking
-      if (counter.getNumMatches() == 2) {
+      if (counter.getNumMatches() == usualNumberOfMatchesRequiredBeforeInvestigating) {
         this.foundGoodMatchCounter = true;
         this.declareGood(counter);
       } else {
@@ -404,9 +406,9 @@ public class Counting_HashBlockPath {
   public List<HashBlockMatch_Counter> findGoodPositionsHavingPriorityUpTo(int priority) {
     // advance far enough that we can know how many positions there are having this number of mismatches
     while (true) {
-      if (numNonoverlappingBlocksVisited >= priority + 2) {
-        // If a position has 2 distinct hashblocks then we count it as a good position
-        // So, if we want to find up to <numMismatches> mismatched blocks, we have to check up to 2 more blocks
+      if (numNonoverlappingBlocksVisited >= priority + usualNumberOfMatchesRequiredBeforeInvestigating) {
+        // If a position has usualNumberOfMatchesRequiredBeforeInvestigating distinct hashblocks then we consider it worth investigating
+        // So, if we want to find up to <numMismatches> mismatched blocks, we have to check up to usualNumberOfMatchesRequiredBeforeInvestigating more blocks
         break;
       }
       if (!this.step()) {
@@ -468,7 +470,7 @@ public class Counting_HashBlockPath {
 
   public List<HashBlockMatch_Counter> getBestMatches() {
     List<HashBlockMatch_Counter> best = new ArrayList<HashBlockMatch_Counter>();
-    if (numBlocksMatchingAnywhere < 2) {
+    if (numBlocksMatchingAnywhere < usualNumberOfMatchesRequiredBeforeInvestigating) {
       return best;
     }
     int min = this.getNumGoodDistinctMismatches();

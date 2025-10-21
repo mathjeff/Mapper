@@ -447,8 +447,8 @@ public class Main {
     parameters.InsertionStart_Penalty = parameters.DeletionStart_Penalty;
     parameters.InsertionExtension_Penalty = parameters.DeletionExtension_Penalty + additional_insertionExtension_penalty;
     parameters.MaxErrorRate = maxErrorRate;
-    parameters.UnalignedPenalty = maxErrorRate;
     parameters.AmbiguityPenalty = ambiguityPenalty;
+    parameters.UnalignedPenalty = ambiguityPenalty;
     parameters.MaxNumMatches = maxNumMatches;
     parameters.Max_PenaltySpan = max_penaltySpan;
 
@@ -499,12 +499,6 @@ public class Main {
 "\n" +
 "    --split-queries-past-size <size> Any queries longer than <size> will be split into smaller queries.\n" +
 "      THIS OPTION IS A TEMPORARY EXPERIMENT FOR LONG READS TO DETECT REARRANGEMENTS AND IMPROVE PERFORMANCE.\n" +
-"\n" +
-"    --no-gapmers\n" +
-"      When Mapper attempts to identify locations at which the query might align to the reference, Mapper first splits the query into smaller pieces and looks for an exact match for each piece.\n" +
-"      By default, these pieces contain noncontiguous basepairs and might look like XXXXXXXX____XXXX.\n" +
-"      This flag makes these pieces be contiguous instead to look more like XXXXXXXXXXXX.\n" +
-"      THIS OPTION IS A TEMPORARY EXPERIMENT FOR TESTING THE PERFORMANCE OF GAPMERS.\n" +
 "\n" +
 "    --allow-duplicate-contig-names if multiple contigs have the same name, continue instead of throwing an error.\n" +
 "      This can be confusing but shouldn't cause any incorrect results.\n" +
@@ -920,214 +914,220 @@ public class Main {
     long previousElapsedSeconds = 0;
 
     // Create some workers and assign some queries to each
-    Set<AlignerWorker> workers = new HashSet<AlignerWorker>(numThreads);
-
-    long numQueriesLoaded = 0;
-    long numQueriesAssigned = 0;
-    int maxNumBasesPerJob = 50000;
-    int workerIndex = 0;
-    boolean doneReadingQueries = false;
-    List<List<QueryBuilder>> pendingQueries = new ArrayList<List<QueryBuilder>>();
-    long lastPrintTime = 0;
-    long nextCountToPrint = 0;
-    long slowestAlignmentMillis = -1;
-    Query slowestQuery = null;
-    QueryAlignments slowestAlignment = null;
-    RandomMomentSelector randomMomentSelector = new RandomMomentSelector();
-    Query queryAtRandomMoment = null;
-    long cpuMillisSpentOnUnalignedQueries = 0;
-    long cpuMillisSpentAligningMatches = 0;
-    long cpuMillisThroughOptimisticBestAlignments = 0;
-    int numCacheHits = 0;
-    int numCasesImmediatelyAcceptingFirstAlignment = 0;
-    long numIndels = 0;
-    BlockingQueue<AlignerWorker> completedWorkers = new ArrayBlockingQueue<AlignerWorker>(numThreads);
-    boolean everSaturatedWorkers = false;
+    Set<AlignerWorker> activeWorkers = new HashSet<AlignerWorker>(numThreads);
     List<AlignerWorker> pendingWorkers = new ArrayList<AlignerWorker>();
-    int targetNumPendingJobsPerWorker = 10;
-    boolean warnedNotOptimizedForLongReads = false;
-    int warnReadsLongerThanLength = 1600;
-    while (workers.size() > 0 || !doneReadingQueries || pendingQueries.size() > 0) {
-      boolean progressed = false;
-      if (workers.size() >= numThreads)
-        everSaturatedWorkers = true;
-      int targetNumPendingJobs = numThreads * targetNumPendingJobsPerWorker;
-      // Do we have to read more queries?
-      if (!doneReadingQueries && (pendingQueries.size() < 1 || (workers.size() >= numThreads && pendingQueries.size() < targetNumPendingJobs))) {
-        long readStart = System.currentTimeMillis();
-        // If most workers are idle, then give each worker just a few queries so they can more quickly have something to do
-        int targetNumBases = Math.min(maxNumBasesPerJob, Math.max(maxNumBasesPerJob * (pendingQueries.size() + 1) / numThreads, 1));
-        // If we haven't yet spawned all of the initial workers, then just give one query to each worker so that this worker will help to hash the reference
-        if (!everSaturatedWorkers)
-          targetNumBases = 1;
-        List<QueryBuilder> batch = new ArrayList<QueryBuilder>();
-        int totalLengthOfPendingQueries = 0;
-        while (true) {
-          if (totalLengthOfPendingQueries >= targetNumBases) {
-            break;
-          }
-          QueryBuilder queryBuilder = queries.getNextQueryBuilder();
-          if (queryBuilder == null) {
-            doneReadingQueries = true;
-            break;
-          }
-          numQueriesLoaded++;
-          queryBuilder.setId(numQueriesLoaded);
-          batch.add(queryBuilder);
-          int queryLength = queryBuilder.getLength();
-          if (queryLength > warnReadsLongerThanLength) {
-            if (!warnedNotOptimizedForLongReads) {
-              outputWriter.write("\n  Warning: Found read of length " + queryLength + ", longer than " + warnReadsLongerThanLength + ". This version of Mapper is not optimized for long reads. You may be interested in --split-queries-past-size\n");
-              warnedNotOptimizedForLongReads = true;
+
+    try {
+      long numQueriesLoaded = 0;
+      long numQueriesAssigned = 0;
+      int maxNumBasesPerJob = 50000;
+      int workerIndex = 0;
+      boolean doneReadingQueries = false;
+      List<List<QueryBuilder>> pendingQueries = new ArrayList<List<QueryBuilder>>();
+      long lastPrintTime = 0;
+      long nextCountToPrint = 0;
+      long slowestAlignmentMillis = -1;
+      Query slowestQuery = null;
+      QueryAlignments slowestAlignment = null;
+      RandomMomentSelector randomMomentSelector = new RandomMomentSelector();
+      Query queryAtRandomMoment = null;
+      long cpuMillisSpentOnUnalignedQueries = 0;
+      long cpuMillisSpentAligningMatches = 0;
+      long cpuMillisThroughOptimisticBestAlignments = 0;
+      int numCacheHits = 0;
+      int numCasesImmediatelyAcceptingFirstAlignment = 0;
+      long numIndels = 0;
+      BlockingQueue<AlignerWorker> completedWorkers = new ArrayBlockingQueue<AlignerWorker>(numThreads);
+      boolean everSaturatedWorkers = false;
+      int targetNumPendingJobsPerWorker = 10;
+      boolean warnedNotOptimizedForLongReads = false;
+      int warnReadsLongerThanLength = 1600;
+      while (activeWorkers.size() > 0 || !doneReadingQueries || pendingQueries.size() > 0) {
+        boolean progressed = false;
+        if (activeWorkers.size() >= numThreads)
+          everSaturatedWorkers = true;
+        int targetNumPendingJobs = numThreads * targetNumPendingJobsPerWorker;
+        // Do we have to read more queries?
+        if (!doneReadingQueries && (pendingQueries.size() < 1 || (activeWorkers.size() >= numThreads && pendingQueries.size() < targetNumPendingJobs))) {
+          long readStart = System.currentTimeMillis();
+          // If most workers are idle, then give each worker just a few queries so they can more quickly have something to do
+          int targetNumBases = Math.min(maxNumBasesPerJob, Math.max(maxNumBasesPerJob * (pendingQueries.size() + 1) / numThreads, 1));
+          // If we haven't yet spawned all of the initial workers, then just give one query to each worker so that this worker will help to hash the reference
+          if (!everSaturatedWorkers)
+            targetNumBases = 1;
+          List<QueryBuilder> batch = new ArrayList<QueryBuilder>();
+          int totalLengthOfPendingQueries = 0;
+          while (true) {
+            if (totalLengthOfPendingQueries >= targetNumBases) {
+              break;
             }
-          }
-          totalLengthOfPendingQueries += queryLength;
-        }
-        pendingQueries.add(batch);
-        progressed = true;
-        long readEnd = System.currentTimeMillis();
-        readingMillis += (readEnd - readStart);
-      }
-
-      // if don't have enough active workers, assign a job to a worker
-      if (workers.size() < numThreads) {
-        long launchStart = System.currentTimeMillis();
-
-        List<QueryBuilder> queriesToProcess;
-        // we have enough idle threads to spawn another worker
-        if (pendingQueries.size() > 0) {
-          // we have queries that haven't been assigned
-          queriesToProcess = pendingQueries.get(pendingQueries.size() - 1);
-          pendingQueries.remove(pendingQueries.size() - 1);
-        } else {
-          // each query has been given to some worker
-          // We might be able to help hash the reference more quickly, though
-          if (referenceProvider.getCanUseHelp()) {
-            queriesToProcess = new ArrayList<QueryBuilder>();
-          } else {
-            queriesToProcess = null;
-          }
-        }
-        if (queriesToProcess != null) {
-          long now = System.currentTimeMillis();
-          long elapsed = (now - startMillis) / 1000;
-
-          // give these queries to this worker
-          BufferedWriter loggerWriter = new BufferedWriter(outputWriter, "\nOutput from worker " + workerIndex + ":", 100000);
-          Logger workerAlignmentLogger = alignmentLogger.withWriter(loggerWriter);
-          Logger workerReferenceLogger = referenceLogger.withWriter(loggerWriter);
-          if (autoVerbose && workerIndex == 0) {
-            workerAlignmentLogger = new Logger(loggerWriter, 1, Integer.MAX_VALUE);
-          }
-          AlignerWorker worker;
-          boolean workerAlreadyRunning;
-          if (pendingWorkers.size() > 0) {
-            worker = pendingWorkers.remove(pendingWorkers.size() - 1);
-            workerAlreadyRunning = true;
-          } else {
-            worker = new AlignerWorker(referenceProvider, parameters, approximateDuplicationDetector.getView(workerReferenceLogger), workerIndex, alignmentListeners, alignmentCache, completedWorkers);
-            workerAlreadyRunning = false;
-          }
-          long estimatedTotalNumQueries;
-          if (!doneReadingQueries)
-            estimatedTotalNumQueries = numQueriesLoaded * 2;
-          else
-            estimatedTotalNumQueries = numQueriesLoaded;
-          workers.add(worker);
-          worker.requestProcess(queriesToProcess, startMillis, estimatedTotalNumQueries, workerAlignmentLogger, workerReferenceLogger);
-          numQueriesAssigned += queriesToProcess.size();
-          workerIndex++;
-          progressed = true;
-          if (!workerAlreadyRunning)
-            worker.start();
-
-          // determine if enough queries have completed and enough time has passed for it to be worth issuing a status update
-          if (numQueriesAssigned >= nextCountToPrint) {
-            nextCountToPrint = determineNextCountToReport(numQueriesAssigned);
-            if (elapsed != lastPrintTime) {
-              // note elapsed != 0 because lastPrintTime starts at 0
-              long queriesPerSecond = numQueriesAssigned / elapsed;
-              outputWriter.write("Processing query " + numQueriesAssigned + " at " + elapsed + "s (" + queriesPerSecond + " q/s), " + workers.size() + " workers, " + pendingQueries.size() + "/" + targetNumPendingJobs + " ready jobs");
-              if (!checkMemoryUsage()) {
-                targetNumPendingJobsPerWorker = 1;
+            QueryBuilder queryBuilder = queries.getNextQueryBuilder();
+            if (queryBuilder == null) {
+              doneReadingQueries = true;
+              break;
+            }
+            numQueriesLoaded++;
+            queryBuilder.setId(numQueriesLoaded);
+            batch.add(queryBuilder);
+            int queryLength = queryBuilder.getLength();
+            if (queryLength > warnReadsLongerThanLength) {
+              if (!warnedNotOptimizedForLongReads) {
+                outputWriter.write("\n  Warning: Found read of length " + queryLength + ", longer than " + warnReadsLongerThanLength + ". This version of Mapper is not optimized for long reads. You may be interested in --split-queries-past-size\n");
+                warnedNotOptimizedForLongReads = true;
               }
-              lastPrintTime = elapsed;
+            }
+            totalLengthOfPendingQueries += queryLength;
+          }
+          pendingQueries.add(batch);
+          progressed = true;
+          long readEnd = System.currentTimeMillis();
+          readingMillis += (readEnd - readStart);
+        }
+
+        // if don't have enough active workers, assign a job to a worker
+        if (activeWorkers.size() < numThreads) {
+          long launchStart = System.currentTimeMillis();
+
+          List<QueryBuilder> queriesToProcess;
+          // we have enough idle threads to spawn another worker
+          if (pendingQueries.size() > 0) {
+            // we have queries that haven't been assigned
+            queriesToProcess = pendingQueries.get(pendingQueries.size() - 1);
+            pendingQueries.remove(pendingQueries.size() - 1);
+          } else {
+            // each query has been given to some worker
+            // We might be able to help hash the reference more quickly, though
+            if (referenceProvider.getCanUseHelp()) {
+              queriesToProcess = new ArrayList<QueryBuilder>();
+            } else {
+              queriesToProcess = null;
             }
           }
-        }
-        long launchEnd = System.currentTimeMillis();
-        launchingMillis += (launchEnd - launchStart);
-      }
+          if (queriesToProcess != null) {
+            long now = System.currentTimeMillis();
+            long elapsed = (now - startMillis) / 1000;
 
-      long waitStart = System.currentTimeMillis();
-      while (!progressed || (everSaturatedWorkers && completedWorkers.peek() != null)) {
-        // process any workers that completed
-        AlignerWorker worker = completedWorkers.poll(1, TimeUnit.SECONDS);
-        if (worker == null) {
-          if (referenceProvider.getCanUseHelp())
-            break;
-          else
-            continue;
-        }
-        boolean succeeded = worker.tryComplete();
-        if (succeeded == false) {
-          outputWriter.write("Worker failed; aborting");
-          while (completedWorkers.peek() != null) {
-            completedWorkers.take().tryComplete();
+            // give these queries to this worker
+            BufferedWriter loggerWriter = new BufferedWriter(outputWriter, "\nOutput from worker " + workerIndex + ":", 100000);
+            Logger workerAlignmentLogger = alignmentLogger.withWriter(loggerWriter);
+            Logger workerReferenceLogger = referenceLogger.withWriter(loggerWriter);
+            if (autoVerbose && workerIndex == 0) {
+              workerAlignmentLogger = new Logger(loggerWriter, 1, Integer.MAX_VALUE);
+            }
+            AlignerWorker worker;
+            boolean workerAlreadyRunning;
+            if (pendingWorkers.size() > 0) {
+              worker = pendingWorkers.remove(pendingWorkers.size() - 1);
+              workerAlreadyRunning = true;
+            } else {
+              worker = new AlignerWorker(referenceProvider, parameters, approximateDuplicationDetector.getView(workerReferenceLogger), workerIndex, alignmentListeners, alignmentCache, completedWorkers);
+              workerAlreadyRunning = false;
+            }
+            long estimatedTotalNumQueries;
+            if (!doneReadingQueries)
+              estimatedTotalNumQueries = numQueriesLoaded * 2;
+            else
+              estimatedTotalNumQueries = numQueriesLoaded;
+            activeWorkers.add(worker);
+            worker.requestProcess(queriesToProcess, startMillis, estimatedTotalNumQueries, workerAlignmentLogger, workerReferenceLogger);
+            numQueriesAssigned += queriesToProcess.size();
+            workerIndex++;
+            progressed = true;
+            if (!workerAlreadyRunning)
+              worker.start();
+
+            // determine if enough queries have completed and enough time has passed for it to be worth issuing a status update
+            if (numQueriesAssigned >= nextCountToPrint) {
+              nextCountToPrint = determineNextCountToReport(numQueriesAssigned);
+              if (elapsed != lastPrintTime) {
+                // note elapsed != 0 because lastPrintTime starts at 0
+                long queriesPerSecond = numQueriesAssigned / elapsed;
+                outputWriter.write("Processing query " + numQueriesAssigned + " at " + elapsed + "s (" + queriesPerSecond + " q/s), " + activeWorkers.size() + " workers, " + pendingQueries.size() + "/" + targetNumPendingJobs + " ready jobs");
+                if (!checkMemoryUsage()) {
+                  targetNumPendingJobsPerWorker = 1;
+                }
+                lastPrintTime = elapsed;
+              }
+            }
           }
-          return null;
+          long launchEnd = System.currentTimeMillis();
+          launchingMillis += (launchEnd - launchStart);
         }
 
-        // remove this worker
-        workers.remove(worker);
-        pendingWorkers.add(worker);
-        long workerSlowestAlignmentMillis = worker.getSlowestAlignmentMillis();
-        if (workerSlowestAlignmentMillis > slowestAlignmentMillis) {
-          slowestAlignmentMillis = workerSlowestAlignmentMillis;
-          slowestQuery = worker.getSlowestQuery();
-          slowestAlignment = worker.getSlowestAlignment();
-        }
-        cpuMillisSpentOnUnalignedQueries += worker.getMillisSpentOnUnalignedQueries();
-        cpuMillisSpentAligningMatches += worker.getMillisSpentAligningMatches();
-        cpuMillisThroughOptimisticBestAlignments += worker.getMillisThroughOptimisticBestAlignments();
+        long waitStart = System.currentTimeMillis();
+        while (!progressed || (everSaturatedWorkers && completedWorkers.peek() != null)) {
+          // process any workers that completed
+          AlignerWorker worker = completedWorkers.poll(1, TimeUnit.SECONDS);
+          if (worker == null) {
+            if (referenceProvider.getCanUseHelp())
+              break;
+            else
+              continue;
+          }
+          boolean succeeded = worker.tryComplete();
+          if (succeeded == false) {
+            outputWriter.write("Worker failed; aborting");
+            while (completedWorkers.peek() != null) {
+              completedWorkers.take().tryComplete();
+            }
+            return null;
+          }
 
-        if (randomMomentSelector.select(System.currentTimeMillis())) {
-          Query random = worker.getQueryAtRandomMoment();
-          if (random != null)
-            queryAtRandomMoment = random;
+          // remove this worker
+          activeWorkers.remove(worker);
+          pendingWorkers.add(worker);
+          long workerSlowestAlignmentMillis = worker.getSlowestAlignmentMillis();
+          if (workerSlowestAlignmentMillis > slowestAlignmentMillis) {
+            slowestAlignmentMillis = workerSlowestAlignmentMillis;
+            slowestQuery = worker.getSlowestQuery();
+            slowestAlignment = worker.getSlowestAlignment();
+          }
+          cpuMillisSpentOnUnalignedQueries += worker.getMillisSpentOnUnalignedQueries();
+          cpuMillisSpentAligningMatches += worker.getMillisSpentAligningMatches();
+          cpuMillisThroughOptimisticBestAlignments += worker.getMillisThroughOptimisticBestAlignments();
+
+          if (randomMomentSelector.select(System.currentTimeMillis())) {
+            Query random = worker.getQueryAtRandomMoment();
+            if (random != null)
+              queryAtRandomMoment = random;
+          }
+          numCacheHits += worker.getNumCacheHits();
+          numCasesImmediatelyAcceptingFirstAlignment += worker.getNumCasesImmediatelyAcceptingFirstAlignment();
+          numIndels += worker.getNumIndels();
+          progressed = true;
         }
-        numCacheHits += worker.getNumCacheHits();
-        numCasesImmediatelyAcceptingFirstAlignment += worker.getNumCasesImmediatelyAcceptingFirstAlignment();
-        numIndels += worker.getNumIndels();
-        progressed = true;
+        long waitEnd = System.currentTimeMillis();
+        waitingMillis += (waitEnd - waitStart);
       }
-      long waitEnd = System.currentTimeMillis();
-      waitingMillis += (waitEnd - waitStart);
-    }
-    for (AlignerWorker worker: pendingWorkers) {
-      worker.noMoreQueries();
-    }
-    long doneAligningQueriesAt = System.currentTimeMillis();
-    AlignmentStatistics result = new AlignmentStatistics();
-    result.millisReadingQueries = readingMillis;
-    result.millisLaunchingWorkers = launchingMillis;
-    result.millisWaitingForWorkers = waitingMillis;
-    result.cpuMillisSpentOnUnalignedQueries = cpuMillisSpentOnUnalignedQueries;
-    if (slowestQuery != null) {
-      result.slowestQuery = slowestQuery;
-      result.slowestQueryNumAlignments = slowestAlignment.getTotalOfAllComponents();
-      result.slowestQueryMillis = slowestAlignmentMillis;
-    }
-    result.queryAtRandomMoment = queryAtRandomMoment;
-    result.cpuMillisSpentAligningMatches = cpuMillisSpentAligningMatches;
-    result.cpuMillisThroughOptimisticBestAlignments = cpuMillisThroughOptimisticBestAlignments;
-    result.numCasesImmediatelyAcceptingFirstAlignment = numCasesImmediatelyAcceptingFirstAlignment;
-    result.numQueriesLoaded = numQueriesLoaded;
-    result.numCacheHits = numCacheHits;
-    result.numIndels = numIndels;
-    result.containsLongRead = warnedNotOptimizedForLongReads;
+      long doneAligningQueriesAt = System.currentTimeMillis();
+      AlignmentStatistics result = new AlignmentStatistics();
+      result.millisReadingQueries = readingMillis;
+      result.millisLaunchingWorkers = launchingMillis;
+      result.millisWaitingForWorkers = waitingMillis;
+      result.cpuMillisSpentOnUnalignedQueries = cpuMillisSpentOnUnalignedQueries;
+      if (slowestQuery != null) {
+        result.slowestQuery = slowestQuery;
+        result.slowestQueryNumAlignments = slowestAlignment.getTotalOfAllComponents();
+        result.slowestQueryMillis = slowestAlignmentMillis;
+      }
+      result.queryAtRandomMoment = queryAtRandomMoment;
+      result.cpuMillisSpentAligningMatches = cpuMillisSpentAligningMatches;
+      result.cpuMillisThroughOptimisticBestAlignments = cpuMillisThroughOptimisticBestAlignments;
+      result.numCasesImmediatelyAcceptingFirstAlignment = numCasesImmediatelyAcceptingFirstAlignment;
+      result.numQueriesLoaded = numQueriesLoaded;
+      result.numCacheHits = numCacheHits;
+      result.numIndels = numIndels;
+      result.containsLongRead = warnedNotOptimizedForLongReads;
 
-    return result;
+      return result;
+    } finally {
+      for (AlignerWorker worker: pendingWorkers) {
+        worker.noMoreQueries();
+      }
+      for (AlignerWorker worker: activeWorkers) {
+        worker.noMoreQueries();
+      }
+    }
   }
 
   private static boolean checkMemoryUsage() {
