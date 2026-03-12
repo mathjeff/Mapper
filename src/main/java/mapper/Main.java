@@ -590,7 +590,8 @@ public class Main {
 "      --snp-penalty <penalty> (default 1) the penalty of a point mutation\n" +
 "\n" +
 "      --ambiguity-penalty <penalty> (default --max-penalty) the penalty of a fully ambiguous position.\n" +
-"        This penalty is applied in the case of an unknown basepair in the reference ('N').\n" +
+"        This penalty is applied in the case of an unknown basepair ('N') in the query or reference.\n" +
+"        This penalty is also used for an unaligned basepair that extends past the end of the reference.\n" +
 "\n" +
 "      --new-indel-penalty <penalty> (default 1.5) the penalty of a new insertion or deletion of length 0\n" +
 "\n" +

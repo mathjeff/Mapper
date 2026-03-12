@@ -25,7 +25,7 @@ public class Logger {
     if (this.enabled) {
       this.writer.write(this.prefix + message.replace("\n", "\n" + this.prefix));
     } else {
-      throw new IllegalArgumentException("Called log() on a disabled (depth = " + depth + ", maxEnabledDepth = " + maxEnabledDepth + ") with message '" + message + "'");
+      throw new IllegalArgumentException("Called log() on a disabled logger (depth = " + depth + ", maxEnabledDepth = " + maxEnabledDepth + ") with message '" + message + "'");
     }
   }
 

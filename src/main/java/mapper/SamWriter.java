@@ -91,7 +91,7 @@ public class SamWriter implements AlignmentListener {
     this.writeComment("  Alignment score format:");
     if (explainPairedEndReads) {
       this.writeComment("   cs:f:<float>   combined alignment score of this query and its mate = <float>");
-      this.writeComment("    Combined alignment score (CAS) = (mate1.score + mate2.score - overlap.score) * (mate1.length + mate2.length) / (unique length) + spacing.score . See --verbose output for more details.");
+      this.writeComment("    Combined alignment score (cs) = (mate1.score + mate2.score - overlap.score) * (mate1.length + mate2.length) / (unique length) + spacing.score . See --verbose output for more details.");
       this.writeComment("");
     }
     this.writeComment("   AS:f:<float>    score of alignment = <float>");

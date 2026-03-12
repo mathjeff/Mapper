@@ -1,6 +1,6 @@
 # X-Mapper: a fast, accurate aligner for genomic sequences
 
-Download the latest release version here: https://github.com/mathjeff/Mapper/releases/download/1.2.1-beta02/x-mapper-1.2.1-beta02.jar
+Download the latest release version here: https://github.com/mathjeff/Mapper/releases/download/1.2.1/x-mapper-1.2.1.jar
 
 Also available as `x-mapper` in Bioconda - see https://bioconda.github.io/recipes/x-mapper/README.html
 
@@ -128,7 +128,8 @@ Contact:\
       --snp-penalty <penalty> (default 1) the penalty of a point mutation
 
       --ambiguity-penalty <penalty> (default --max-penalty) the penalty of a fully ambiguous position.
-        This penalty is applied in the case of an unknown basepair in the reference ('N').
+        This penalty is applied in the case of an unknown basepair ('N') in the query or reference.
+        This penalty is also used for an unaligned basepair that extends past the end of the reference.
 
       --new-indel-penalty <penalty> (default 1.5) the penalty of a new insertion or deletion of length 0
 
