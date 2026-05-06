@@ -90,7 +90,7 @@ public class StraightAligner implements LocalAligner {
     Sequence query = querySection.getSequence();
     Sequence reference = referenceSection.getSequence();
 
-    return new SequenceAlignment(new AlignedBlock(query, reference, queryStartIndex, referenceStartIndex, queryEndIndex - queryStartIndex, referenceEndIndex - referenceStartIndex), parameters, (query.getComplementedFrom() != null));
+    return parameters.newSequenceAlignment(new AlignedBlock(query, reference, queryStartIndex, referenceStartIndex, queryEndIndex - queryStartIndex, referenceEndIndex - referenceStartIndex), (query.getComplementedFrom() != null));
   } 
 
 

@@ -1,5 +1,8 @@
 package mapper;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class AlignmentParameters {
   // the penalty we apply for a point mutation
   public double MutationPenalty;
@@ -60,4 +63,120 @@ public class AlignmentParameters {
 
     return result;
   }
+
+  public SequenceAlignment newSequenceAlignment(AlignedBlock block, boolean referenceReversed) {
+    List<AlignedBlock> blocks = new ArrayList<AlignedBlock>(1);
+    blocks.add(block);
+    return newSequenceAlignment(blocks, referenceReversed);
+  }
+
+  public SequenceAlignment newSequenceAlignment(List<AlignedBlock> sections, boolean referenceReversed) {
+    int alignedQueryLength = 0;
+    double totalPenalty = 0;
+    for (AlignedBlock block : sections) {
+      totalPenalty += this.getPenalty(block);
+      alignedQueryLength += block.getLengthA();
+    }
+    if (sections.size() > 0) {
+      AlignedBlock firstBlock = sections.get(0);
+      if (this.StartingInsertionStartFree && firstBlock.getLengthB() == 0)
+        totalPenalty -= this.InsertionStart_Penalty;
+    }
+
+    double alignedPenalty = totalPenalty;
+    if (sections.size() > 0) {
+      AlignedBlock firstBlock = sections.get(0);
+      int unalignedQueryLength = firstBlock.getSequenceA().getLength() - alignedQueryLength;
+      double unalignedPenalty = (double)unalignedQueryLength * this.UnalignedPenalty;
+      totalPenalty += unalignedPenalty;
+    }
+    double penalty = totalPenalty;
+    return new SequenceAlignment(sections, referenceReversed, totalPenalty, alignedPenalty);
+  }
+
+  public double getPenalty(SequenceAlignment alignment, int startIndexB, int endIndexB) {
+    double totalPenalty = 0;
+    for (AlignedBlock block: alignment.getSections()) {
+      totalPenalty += this.getPenalty(block, startIndexB, endIndexB);
+    }
+    return totalPenalty;
+  }
+
+
+  public double getPenalty(AlignedBlock block) {
+    double penalty = 0;
+    if (block.getLengthA() == block.getLengthB()) {
+      // this block is a 1-to-1 matching
+      for (int i = 0; i < block.getLengthA(); i++) {
+        byte a = block.getSequenceA().encodedCharAt(block.getStartIndexA() + i);
+        byte b = block.getSequenceBHistory().encodedCharAt(block.getStartIndexB() + i);
+        penalty += this.getPenalty(a, b);
+      }
+    } else {
+      // this block is an insertion or a deletion
+      if (block.getLengthA() > 0) {
+        penalty += this.InsertionStart_Penalty;
+        penalty += this.InsertionExtension_Penalty * block.getLengthA();
+      } else {
+        penalty += this.DeletionStart_Penalty;
+        penalty += this.DeletionExtension_Penalty * block.getLengthB();
+      }
+    }
+    return penalty;
+  }
+
+  public double getPenalty(AlignedBlock block, int startIndexB, int endIndexB) {
+    double penalty = 0;
+    if (block.getLengthA() == block.getLengthB()) {
+      // this block is a 1-1 matching
+      for (int i = 0; i < block.getLengthA(); i++) {
+        int bIndex = block.getStartIndexB() + i;
+        if (bIndex >= startIndexB && bIndex < endIndexB) {
+          int aIndex = block.getStartIndexA() + i;
+          byte a = block.getSequenceA().encodedCharAt(aIndex);
+          byte b = block.getSequenceBHistory().encodedCharAt(bIndex);
+          penalty += this.getPenalty(a, b);
+        }
+      }
+    } else {
+      // this block is an insertion or a deletion
+      if (block.getStartIndexB() < endIndexB && block.getEndIndexB() > startIndexB) {
+        if (block.getLengthA() > 0) {
+          penalty += this.InsertionStart_Penalty;
+          penalty += this.InsertionExtension_Penalty * block.getLengthA();
+        } else {
+          penalty += this.DeletionStart_Penalty;
+          penalty += this.DeletionExtension_Penalty * block.getLengthB();
+        }
+      }
+    }
+    return penalty;
+  }
+
+  public double getPenalty(byte encodedQuery, byte encodedReference) {
+    // The penalty of an alignment is essentially the log of how likely we think it is to observe this alignment
+    if (!Basepairs.canMatch(encodedReference, encodedQuery)) {
+      // if the two basepairs don't match, that's a mutation, and we know the penalty
+      return this.MutationPenalty;
+    }
+    // if the two basepairs can match, we have to calculate a penalty if there is ambiguity
+    // We want to calculate the probability that we could identify a mutation in one of these basepairs
+
+    // Suppose that the possible values reported for the query must be one of:
+    //  - The ambiguity code we have for it now
+    //  - Any other specific basepair that doesn't match that ambiguity code
+    // Suppose that the possible values reported for the reference must be one of:
+    //  - The ambiguity code we have for it now
+    //  - Any other specific basepair that doesn't match that ambiguity code
+
+    // This means:
+    //  - If the query's true value mutates into another specific basepair covered by its current ambiguity code, we expect it to be still reported via the same ambiguity code and we expect to not be able to detect this mutation
+    //  - If the query's true value mutates into another specific basepair covered by the reference's ambiguity code, we would still consider this to be a match and wouldn't notice the mutation
+    //  - If the query's true value mutates into another specific basepair that isn't covered by the query's current ambiguity code or the reference's current ambiguity code, then we could detect this mutation
+
+    // So, we want to compute the probability that a mutation in one of these basepairs would change it into a basepair that isn't included in the either the query's current ambiguity code or the reference's ambiguity code
+    byte encodedUnion = Basepairs.union(encodedQuery, encodedReference);
+    return this.AmbiguityPenalty * Basepairs.getMutationFalseNegativeRate(encodedUnion);
+  }
+
 }

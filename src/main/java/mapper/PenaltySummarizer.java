@@ -13,13 +13,14 @@ public class PenaltySummarizer implements AlignmentListener {
   public void addAlignments(List<QueryAlignments> queryAlignments) {
     int[] additions = new int[this.counts.length];
     for (QueryAlignments alignments: queryAlignments) {
-      for (Map.Entry<Query, List<QueryAlignment>> foundAlignments: alignments.getAlignments().entrySet()) {
-        List<QueryAlignment> alignment = foundAlignments.getValue();
-        Query query = foundAlignments.getKey();
+      for (int i = 0; i < alignments.getNumComponents(); i++) {
+        List<QueryAlignment> alignment = alignments.getAlignments(i);
+
         if (alignment.size() > 0) {
           QueryAlignment firstAlignment = alignment.get(0);
           double penalty = firstAlignment.getPenalty();
-          double maxAllowedPenalty = query.getLength() * this.alignmentParameters.MaxErrorRate;
+          int queryLength = alignments.getQueryLength(i);
+          double maxAllowedPenalty = queryLength * this.alignmentParameters.MaxErrorRate;
           if (maxAllowedPenalty == 0)
             maxAllowedPenalty = 1;
           double penaltyFraction = penalty / maxAllowedPenalty;

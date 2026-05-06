@@ -348,7 +348,7 @@ public class PathAligner {
     // If any initial sections became empty, remove them too
     while (this.canRemoveSection(sections.get(0)))
       sections.remove(0);
-    return new SequenceAlignment(sections, parameters, (this.query.getComplementedFrom() != null));
+    return parameters.newSequenceAlignment(sections, (this.query.getComplementedFrom() != null));
   }
 
   private void maybeOutputDiagnostics() {
@@ -584,7 +584,7 @@ public class PathAligner {
     if (diagonal != null) {
       byte a = this.getEncodedCharA(x - 1);
       byte b = this.getEncodedCharB(y - 1);
-      newOverlayPenalty = Basepairs.getPenalty(a, b, this.parameters);
+      newOverlayPenalty = this.parameters.getPenalty(a, b);
       overlayPenalty = diagonal.getPenalty() + newOverlayPenalty;
     }
 
@@ -613,7 +613,7 @@ public class PathAligner {
           if (nextAIndex >= 0 && nextAIndex < this.textALength && nextBIndex >= 0 && nextBIndex < this.textBLength) {
             byte nextA = this.getEncodedCharA(nextAIndex);
             byte nextB = this.getEncodedCharB(nextBIndex);
-            if (Basepairs.getPenalty(nextA, nextB, this.parameters) == 0) {
+            if (this.parameters.getPenalty(nextA, nextB) == 0) {
               // It's wasteful to check for an insertion right before two matching basepairs
               // We should be able to shift the indel one position later and not get a worse score
               newInsertionAllowed = false;
@@ -655,7 +655,7 @@ public class PathAligner {
         if (nextAIndex >= 0 && nextAIndex < this.textALength && nextBIndex >= 0 && nextBIndex < this.textBLength) {
           byte nextA = this.getEncodedCharA(nextAIndex);
           byte nextB = this.getEncodedCharB(nextBIndex);
-          if (Basepairs.getPenalty(nextA, nextB, this.parameters) == 0) {
+          if (this.parameters.getPenalty(nextA, nextB) == 0) {
             newInsertionAllowed = false;
           } else {
             if (Basepairs.isFullyAmbiguous(nextA) || Basepairs.isFullyAmbiguous(nextB)) {

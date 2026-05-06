@@ -86,7 +86,7 @@ public class Api {
     worker.setup();
     worker.setLogger(logger);
     worker.beforeBatch();
-    List<QueryAlignment> results = worker.align(query).getAlignmentsForQuery(query);
+    List<QueryAlignment> results = worker.align(query).getTopLevelAlignments();
     worker.afterBatch();
     return results;
   }

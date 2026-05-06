@@ -1,3 +1,6 @@
+plugins {
+  id "com.gradleup.shadow" version "8.3.0"
+}
 apply plugin: "java"
 
 // get git version
@@ -23,19 +26,28 @@ compileJava {
   targetCompatibility = 1.8
 }
 
-String mainClass = "mapper.Main"
+String mainClass = "mapper.Mapper"
 
 jar {
   manifest {
     attributes 'Main-Class': mainClass
   }
+  archiveClassifier = "no-dependencies"
 }
+
+tasks["shadowJar"].archiveClassifier = null
 
 dependencies {
   test {
     testImplementation "junit:junit:4.13"
   }
+  def quickVariantsJar = project.files("./deps/QuickVariants/QuickVariants/build/libs/quick-variants.jar")
+  implementation(quickVariantsJar)
+  runtimeOnly(quickVariantsJar)
 }
+
+tasks["compileJava"].dependsOn(gradle.includedBuild("QuickVariants").task(":assemble"))
+tasks["assemble"].dependsOn(":shadowJar")
 
 def helpOutput = new ByteArrayOutputStream()
 task updateHelp(type: Exec) {

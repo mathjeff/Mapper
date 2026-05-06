@@ -37,6 +37,15 @@ public class SequenceMatch {
   public int getOffset() {
     return offset;
   }
+  public boolean offsetContainedIn(SequenceAlignment alignment) {
+    if (this.getSequenceB() != alignment.getSequenceB())
+      return false;
+    for (AlignedBlock block: alignment.getSections()) {
+      if (block.getOffset() == this.getOffset())
+        return true;
+    }
+    return false;
+  }
 
   @Override
   public boolean equals(Object otherObject) {

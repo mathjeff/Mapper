@@ -1,1 +1,2 @@
 project(":").name = "x-mapper"
+includeBuild("./deps/QuickVariants/QuickVariants")

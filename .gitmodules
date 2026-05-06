@@ -1,0 +1,3 @@
+[submodule "deps/QuickVariants"]
+	path = deps/QuickVariants
+	url = ../../caozhichongchong/QuickVariants

@@ -185,7 +185,7 @@ public class BlockAligner implements LocalAligner {
     for (int i = 1; i < rightSections.size(); i++) {
       sections.add(rightSections.get(i));
     }
-    SequenceAlignment result = new SequenceAlignment(sections, parameters, left.isReferenceReversed());
+    SequenceAlignment result = parameters.newSequenceAlignment(sections, left.isReferenceReversed());
     return result;
   }
 

@@ -208,14 +208,14 @@ public class AlignerWorker extends Thread {
         }
         // collect results
         alignments.add(alignmentsHere);
-        for (HashMap.Entry<Query, List<QueryAlignment>> componentAlignments: alignmentsHere.getAlignments().entrySet()) {
-          Query subQuery = componentAlignments.getKey();
-          List<QueryAlignment> subAlignments = componentAlignments.getValue();
-          numIndels += countNumIndels(subAlignments);
+        for (int i = 0; i < alignmentsHere.getNumComponents(); i++) {
+          List<QueryAlignment> component = alignmentsHere.getAlignments(i);
 
-          if (subAlignments.size() > 0) {
+          this.numIndels += countNumIndels(component);
+
+          if (component.size() > 0) {
             if (this.logger.getEnabled()) {
-              this.printAlignment(subQuery, subAlignments);
+              this.printAlignment(component);
             }
           } else {
             this.millisSpentOnUnalignedQueries += elapsed;
@@ -266,17 +266,17 @@ public class AlignerWorker extends Thread {
     QueryAlignments cached = this.resultsCache.get(query);
     if (cached != null) {
       // we currently only support reusing cache results for queries that don't split during alignment
-      if (cached.getNumQueries() == 1 && cached.getFirstQuery().getNumSequences() == query.getNumSequences()) {
+      if (cached.getNumComponents() == 1) {
         numCacheHits++;
         List<QueryAlignment> firstComponent = cached.getFirstAlignments();
         List<QueryAlignment> newComponent = new ArrayList<QueryAlignment>(firstComponent.size());
         for (QueryAlignment option: firstComponent) {
-          newComponent.add(option.withQuery(query));
+          newComponent.add(option.withQuery(query.getSequences()));
         }
         if (logger.getEnabled()) {
           logger.log("reusing cached result");
         }
-        return new QueryAlignments(query, newComponent);
+        return QueryAlignments.singleComponent(query.getSequences(), newComponent);
       }
     }
     QueryAlignments result = this.alignWithoutCache(query);
@@ -293,7 +293,7 @@ public class AlignerWorker extends Thread {
   // aligns to the unmodified reference we've been given
   public QueryAlignments alignWithoutCache(Query query) {
     QueryAlignments results = this.alignToAncestralReference(query);
-    for (List<QueryAlignment> subAlignments: results.getAlignments().values()) {
+    for (List<QueryAlignment> subAlignments: results.getAlignments()) {
       for (QueryAlignment alignment: subAlignments) {
         this.updateSequenceB(alignment);
       }
@@ -346,10 +346,9 @@ public class AlignerWorker extends Thread {
       long duration = System.currentTimeMillis() - this.latestQueryAlignmentStart;
       this.millisThroughOptimisticBestAlignments += duration;
 
-      // Temporarily disabled because of high memory requirements
       if (quicklyConfidentInBestAlignment(optimisticBestAlignment, optimisticBestMatch)) {
         numCasesImmediatelyAcceptingFirstAlignment++;
-        return new QueryAlignments(query, optimisticBestAlignment);
+        return QueryAlignments.singleChoice(optimisticBestAlignment);
       }
     }
 
@@ -368,7 +367,7 @@ public class AlignerWorker extends Thread {
           }
 
           numCasesImmediatelyAcceptingFirstAlignment++;
-          return new QueryAlignments(query, optimisticBestAlignment);
+          return QueryAlignments.singleChoice(optimisticBestAlignment);
         } else {
           if (this.detailedAlignmentLogger.getEnabled()) {
             this.detailedAlignmentLogger.log("cannot prove optimistic alignment is best yet: penalty could be " + possiblePenalty + " for " + numMismatches + " distinct mismatched blocks");
@@ -469,7 +468,7 @@ public class AlignerWorker extends Thread {
 
     List<QueryAlignment> bestAlignments = aligner.getBestAlignments();
 
-    QueryAlignments result = new QueryAlignments(query, bestAlignments);
+    QueryAlignments result = QueryAlignments.singleComponent(query.getSequences(), bestAlignments);
     if (bestAlignments.size() < 1 && query.getNumSequences() > 1) {
       result = getUnpairedAlignments(query, path);
     }
@@ -478,7 +477,7 @@ public class AlignerWorker extends Thread {
       if (logger.getEnabled()) {
         log("Found more alignments than requested: " + bestAlignments.size() + " > " + parameters.MaxNumMatches + "; clearing results");
       }
-      return new QueryAlignments(query);
+      return QueryAlignments.unaligned(query.getSequences());
     }
 
     return result;
@@ -604,7 +603,10 @@ public class AlignerWorker extends Thread {
     if (logger.getEnabled()) {
       log("Checking for unpaired alignments");
     }
-    Map<Query, List<QueryAlignment>> partialAlignments = new LinkedHashMap<Query, List<QueryAlignment>>();
+    List<List<QueryAlignment>> partialAlignments = new ArrayList<List<QueryAlignment>>();
+    for (int i = 0; i < 2; i++) {
+      partialAlignments.add(new ArrayList<QueryAlignment>());
+    }
     double bestComponentPenalty = Integer.MAX_VALUE;
     double expectedInnerDistance = query.getExpectedInnerDistance();
     for (int sequenceIndex = 0; sequenceIndex < query.getNumSequences(); sequenceIndex++) {
@@ -636,12 +638,12 @@ public class AlignerWorker extends Thread {
         this.alignMatch(subqueryMatch, innerDistance, subqueryAligner);
       }
       List<QueryAlignment> componentAlignments = subqueryAligner.getBestAlignments();
-      partialAlignments.put(subQuery, componentAlignments);
+      partialAlignments.set(sequenceIndex, componentAlignments);
     }
-    return new QueryAlignments(partialAlignments);
+    return new QueryAlignments(query.getSequences(), partialAlignments);
   }
 
-  void printAlignment(Query query, List<QueryAlignment> alignments) {
+  void printAlignment(List<QueryAlignment> alignments) {
     for (QueryAlignment alignment: alignments) {
       log(alignment.formatVerbose());
     }

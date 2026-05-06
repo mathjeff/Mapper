@@ -18,27 +18,27 @@ public class BasepairsTest {
     double mutationPenalty = 100;
     alignmentParameters.MutationPenalty = mutationPenalty;
 
-    double AToCPenalty = Basepairs.getPenalty(A, C, alignmentParameters);
+    double AToCPenalty = alignmentParameters.getPenalty(A, C);
     if (AToCPenalty != mutationPenalty) {
       fail("Expected A to C penalty to be " + mutationPenalty + ", not " + AToCPenalty);
     }
 
-    double AToNPenalty = Basepairs.getPenalty(A, N, alignmentParameters);
+    double AToNPenalty = alignmentParameters.getPenalty(A, N);
     if (AToNPenalty != ambiguityPenalty) {
       fail("Expected A to N penalty to be " + ambiguityPenalty + ", not " + ambiguityPenalty);
     }
-    double NToAPenalty = Basepairs.getPenalty(N, A, alignmentParameters);
+    double NToAPenalty = alignmentParameters.getPenalty(N, A);
     if (ambiguityPenalty != AToNPenalty) {
       fail("Expected N to A penalty to be " + ambiguityPenalty + ", not " + ambiguityPenalty);
     }
 
     double expectedPartialAmbiguityPenalty = ambiguityPenalty / 3;
-    double AToAOrCPenalty = Basepairs.getPenalty(A, AOrC, alignmentParameters);
+    double AToAOrCPenalty = alignmentParameters.getPenalty(A, AOrC);
     if (AToAOrCPenalty != expectedPartialAmbiguityPenalty) {
       fail("Expected A to (A or C) penalty to be " + expectedPartialAmbiguityPenalty + ", not " + AToAOrCPenalty);
     }
 
-    double AOrCToAPenalty = Basepairs.getPenalty(AOrC, A, alignmentParameters);
+    double AOrCToAPenalty = alignmentParameters.getPenalty(AOrC, A);
     if (AOrCToAPenalty != expectedPartialAmbiguityPenalty) {
       fail("Expected (A or C) to A penalty to be " + expectedPartialAmbiguityPenalty + ", not " + AOrCToAPenalty);
     }

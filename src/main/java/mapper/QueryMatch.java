@@ -108,6 +108,16 @@ public class QueryMatch {
     return hintCheckComponentsInForwardOrder;
   }
 
+  public boolean offsetContainedIn(QueryAlignment alignment) {
+    for (int i = 0; i < this.getNumSequences(); i++) {
+      SequenceMatch sequenceMatch = this.getComponents().get(i);
+      SequenceAlignment sequenceAlignment = alignment.getComponent(i);
+      if (!sequenceMatch.offsetContainedIn(sequenceAlignment))
+        return false;
+    }
+    return true;
+  }
+
   // Returns the distance between the two blocks
   // Can return a negative number if they overlap
   private int getDistance(SequenceMatch a, SequenceMatch b) {

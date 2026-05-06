@@ -17,11 +17,11 @@ public class MatchDatabase_Test {
     Sequence a = new SequenceBuilder().setName("a").add(queryText).build();
     Query query = new Query(a);
     Sequence b = new SequenceBuilder().setName("b").add(refText).build();
-    SequenceAlignment sequenceAlignment = new SequenceAlignment(new AlignedBlock(a, b, 0, 0, queryText.length(), refText.length()), new AlignmentParameters(), false);
+    SequenceAlignment sequenceAlignment = new AlignmentParameters().newSequenceAlignment(new AlignedBlock(a, b, 0, 0, queryText.length(), refText.length()), false);
     QueryAlignment alignment = new QueryAlignment(sequenceAlignment);
     MatchDatabase database = new MatchDatabase(0);
     List<QueryAlignments> queryAlignments = new ArrayList<QueryAlignments>();
-    queryAlignments.add(new QueryAlignments(query, alignment));
+    queryAlignments.add(QueryAlignments.singleChoice(alignment));
     database.addAlignments(queryAlignments);
     Alignments alignments = database.groupByPosition().get(b);
     for (int i = 0; i < refText.length(); i++) {
@@ -42,8 +42,9 @@ public class MatchDatabase_Test {
     Sequence query2 = new SequenceBuilder().setName("q2").add(query2Text).build();
     Sequence ref = new SequenceBuilder().setName("ref").add(refText).build();
 
-    SequenceAlignment sequence1Alignment = new SequenceAlignment(new AlignedBlock(query1, ref, 0, 0, query1Text.length(), query1Text.length()), new AlignmentParameters(), false);
-    SequenceAlignment sequence2Alignment = new SequenceAlignment(new AlignedBlock(query2, ref, 0, 3, query2Text.length(), query2Text.length()), new AlignmentParameters(), false);
+    AlignmentParameters parameters = new AlignmentParameters();
+    SequenceAlignment sequence1Alignment = parameters.newSequenceAlignment(new AlignedBlock(query1, ref, 0, 0, query1Text.length(), query1Text.length()), false);
+    SequenceAlignment sequence2Alignment = parameters.newSequenceAlignment(new AlignedBlock(query2, ref, 0, 3, query2Text.length(), query2Text.length()), false);
 
     List<SequenceAlignment> components = new ArrayList<SequenceAlignment>();
     components.add(sequence1Alignment);
@@ -53,7 +54,7 @@ public class MatchDatabase_Test {
     MatchDatabase database = new MatchDatabase(0);
     Query query = new Query(query1, query2, 0, 1);
     List<QueryAlignments> queryAlignments = new ArrayList<QueryAlignments>();
-    queryAlignments.add(new QueryAlignments(query, alignment));
+    queryAlignments.add(QueryAlignments.singleChoice(alignment));
     database.addAlignments(queryAlignments);
 
     Alignments alignments = database.groupByPosition().get(ref);

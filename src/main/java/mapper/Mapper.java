@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit;
 
 import javax.management.MBeanServer;
 
-public class Main {
+public class Mapper {
 
   static Logger alignmentLogger;
   static Logger referenceLogger;
@@ -36,7 +36,7 @@ public class Main {
 
   public static void main(String[] args) throws IllegalArgumentException, FileNotFoundException, IOException, InterruptedException {
     long startMillis = System.currentTimeMillis();
-    MapperMetadata.setMainArguments(args);
+    QuickVariants_Metadata.init("x-mapper", MapperMetadata.getVersion(), args);
 
     outputWriter.write("Mapper version " + MapperMetadata.getVersion());
 
@@ -646,7 +646,7 @@ public class Main {
 
     VcfWriter writer = null;
     if (outVcfPath != null)
-      writer = new VcfWriter(outVcfPath, vcfIncludeNonMutations, vcfFilterParameters, queryEndFraction, vcfShowSupportRead);
+      writer = new VcfWriter(outVcfPath, vcfIncludeNonMutations, vcfFilterParameters, vcfShowSupportRead);
 
      MutationsWriter mutationsWriter = null;
      if (outMutationsPath != null)
@@ -733,11 +733,11 @@ public class Main {
     AlignmentCache alignmentCache = new AlignmentCache();
     AlignmentStatistics statistics = compare(referenceProvider, queries, approximateDuplicationDetector, startMillis, parameters, numThreads, queryEndFraction, alignmentCache, listeners, autoVerbose);
 
-    long numMatchingQuerySequences = matchCounter.getNumMatchingSequences();
-    long numQuerySequences = matchCounter.getNumSequences();
+    long numQueries = matchCounter.getNumQueries();
+    long numAlignedQueries = matchCounter.getNumAlignedQueries();
     long matchPercent;
-    if (numQuerySequences > 0)
-      matchPercent = numMatchingQuerySequences * 100 / numQuerySequences;
+    if (numQueries > 0)
+      matchPercent = numAlignedQueries * 100 / numQueries;
     else
       matchPercent = 0;
     long totalAlignedQueryLength = matchCounter.getTotalAlignedQueryLength();
@@ -786,12 +786,12 @@ public class Main {
     // show statistics
     outputWriter.write("");
     outputWriter.write("Statistics: ");
-    if (matchCounter.getNumMatchingSequences() != matchCounter.getNumAlignedQueries()) {
+    Distribution pairedEndDistance = matchCounter.getDistanceBetweenQueryComponents();
+    if (pairedEndDistance.getWeight() > 0) {
       // paired-end reads
-      Distribution distance = matchCounter.getDistanceBetweenQueryComponents();
-      outputWriter.write(" Query pair separation distance: avg: " + (float)distance.getMean() + " stddev: " + (float)distance.getStdDev() + " (adjust via --spacing)");
+      outputWriter.write(" Query pair separation distance: avg: " + (float)pairedEndDistance.getMean() + " stddev: " + (float)pairedEndDistance.getStdDev() + " (adjust via --spacing)");
     }
-    outputWriter.write(" Alignment rate                : " + matchPercent + "% of query sequences (" + numMatchingQuerySequences + "/" + numQuerySequences + ")");
+    outputWriter.write(" Alignment rate                : " + matchPercent + "% of queries (" + numAlignedQueries + "/" + numQueries + ")");
     if (displayCoverage != null) {
       outputWriter.write(displayCoverage);
     }

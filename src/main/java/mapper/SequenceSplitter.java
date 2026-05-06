@@ -42,6 +42,10 @@ public class SequenceSplitter implements SequenceProvider {
     return false;
   }
 
+  public int getNumErrors() {
+    return 0;
+  }
+
   @Override
   public String toString() {
     return "" + this.provider + " split to size <= " + this.maxLength;

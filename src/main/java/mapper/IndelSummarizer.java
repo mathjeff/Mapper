@@ -14,11 +14,9 @@ public class IndelSummarizer implements AlignmentListener {
     ArrayList<Integer> additions = new ArrayList<Integer>();
 
     for (QueryAlignments alignments: queryAlignments) {
-      for (Map.Entry<Query, List<QueryAlignment>> foundAlignments: alignments.getAlignments().entrySet()) {
-        List<QueryAlignment> alignment = foundAlignments.getValue();
-        Query query = foundAlignments.getKey();
-        if (alignment.size() > 0) {
-          QueryAlignment firstAlignment = alignment.get(0);
+      for (List<QueryAlignment> choices : alignments.getAlignments()) {
+        if (choices.size() > 0) {
+          QueryAlignment firstAlignment = choices.get(0);
           for (SequenceAlignment component: firstAlignment.getComponents()) {
             for (AlignedBlock block: component.getSections()) {
               int indelLength = block.getIndelLength();

@@ -62,7 +62,7 @@ public class QueryMatch_Aligner {
 
   private QueryAlignment getExistingAlignment(QueryMatch queryMatch) {
     for (QueryAlignment candidate: this.goodAlignments) {
-      if (candidate.containsSameOffsetAsMatch(queryMatch))
+      if (queryMatch.offsetContainedIn(candidate))
         return candidate;
     }
     return null;
@@ -398,7 +398,7 @@ public class QueryMatch_Aligner {
         verboseLogger.log("Extracting query positions " + queryStart + " to " + queryEnd + " found no aligned blocks");
       return null;
     }
-    SequenceAlignment result = new SequenceAlignment(blocks, this.parameters, referenceReversed);
+    SequenceAlignment result = this.parameters.newSequenceAlignment(blocks, referenceReversed);
     if (verboseLogger.getEnabled())
       verboseLogger.log("Extracted alignment with penalty " + result.getPenalty() + ":\n " + result.getAlignedTextA() + "\n " + result.getAlignedTextB());
     return result;
@@ -406,7 +406,7 @@ public class QueryMatch_Aligner {
 
   private double computeUngappedPenalty(SequenceMatch sequenceMatch) {
     AlignedBlock block = new AlignedBlock(sequenceMatch.getSequenceA(), sequenceMatch.getSequenceB(), sequenceMatch.getStartIndexA(), sequenceMatch.getStartIndexB(), sequenceMatch.getLength(), sequenceMatch.getLength());
-    return block.getPenalty(this.parameters);
+    return this.parameters.getPenalty(block);
   }
 
   private SequenceAlignment alignMatch(SequenceMatch sequenceMatch, AlignmentParameters parameters) {
@@ -515,7 +515,7 @@ public class QueryMatch_Aligner {
       return 0;
     }
     // Any mismatches in the overlapping section currently get counted twice but we don't want them to be
-    double duplicatedPenalty = (a.getPenalty(this.parameters, b.getStartIndexB(), b.getEndIndexB()) + b.getPenalty(this.parameters, a.getStartIndexB(), a.getEndIndexB())) / 2;
+    double duplicatedPenalty = (this.parameters.getPenalty(a, b.getStartIndexB(), b.getEndIndexB()) + this.parameters.getPenalty(b, a.getStartIndexB(), a.getEndIndexB())) / 2;
     return duplicatedPenalty;
   }
 
