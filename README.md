@@ -169,4 +169,4 @@ To see more demos, see https://github.com/mathjeff/Mapper-Demos
 
 To make changes to X-Mapper, see [DEVELOPING.md](DEVELOPING.md)
 
-## If you're working on a bioinformatics project and would be interested in some consulting help, check out our website at https://genomiverse.net/ !
+## If you like our tools, check out our other work at [genomiverse.net](https://genomiverse.net?utm_source=mapper_readme)!
