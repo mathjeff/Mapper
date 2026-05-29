@@ -840,18 +840,20 @@ public class Mapper {
       int millisOnUnalignedQueries = (int)(statistics.cpuMillisSpentOnUnalignedQueries / 1000 / numThreads);
       outputWriter.write(" Unaligned queries took        : " + statistics.cpuMillisSpentOnUnalignedQueries + " cpu-ms (" + millisOnUnalignedQueries + "s)");
 
-      int immediateAcceptancePercent = (int)(statistics.numCasesImmediatelyAcceptingFirstAlignment * 100 / statistics.numQueriesLoaded);
-      outputWriter.write(" Immediately accepted          : " + immediateAcceptancePercent + "% alignments (" + statistics.numCasesImmediatelyAcceptingFirstAlignment + "/" + statistics.numQueriesLoaded + ")");
-      int millisAligningMatches = (int)(statistics.cpuMillisSpentAligningMatches / 1000 / numThreads);
-      outputWriter.write(" Time aligning matches         : " + statistics.cpuMillisSpentAligningMatches + " cpu-ms (" + millisAligningMatches + "s)");
-      int millisThroughOptimisticBestAlignments = (int)(statistics.cpuMillisThroughOptimisticBestAlignments / 1000 / numThreads);
-      outputWriter.write(" Finding optimistic alignments : " + statistics.cpuMillisThroughOptimisticBestAlignments + " cpu-ms (" + millisThroughOptimisticBestAlignments + "s)");
-      int queriesLoadedFromCachePercent = (int)((long)100 * (long)statistics.numCacheHits / (long)statistics.numQueriesLoaded);
-      int queriesSavedToCachePercent = (int)((long)100 * alignmentCache.getUsage() / (long)statistics.numQueriesLoaded);
-      long numQueriesNotInCache = statistics.numQueriesLoaded - alignmentCache.getUsage() - statistics.numCacheHits;
-      int queriesNotInCachePercent = (int)((long) 100 * (long)numQueriesNotInCache / (long)statistics.numQueriesLoaded);
-
-      outputWriter.write(" Alignment cache usage         : " + queriesLoadedFromCachePercent + "% (" + statistics.numCacheHits + ") loaded, " + queriesSavedToCachePercent + "% (" + alignmentCache.getUsage() + ") stored, " + queriesNotInCachePercent + "% (" + numQueriesNotInCache + ") skipped");
+      if (statistics.numQueriesLoaded > 0) {
+        int immediateAcceptancePercent = (int)(statistics.numCasesImmediatelyAcceptingFirstAlignment * 100 / statistics.numQueriesLoaded);
+        outputWriter.write(" Immediately accepted          : " + immediateAcceptancePercent + "% alignments (" + statistics.numCasesImmediatelyAcceptingFirstAlignment + "/" + statistics.numQueriesLoaded + ")");
+        int millisAligningMatches = (int)(statistics.cpuMillisSpentAligningMatches / 1000 / numThreads);
+        outputWriter.write(" Time aligning matches         : " + statistics.cpuMillisSpentAligningMatches + " cpu-ms (" + millisAligningMatches + "s)");
+        int millisThroughOptimisticBestAlignments = (int)(statistics.cpuMillisThroughOptimisticBestAlignments / 1000 / numThreads);
+        outputWriter.write(" Finding optimistic alignments : " + statistics.cpuMillisThroughOptimisticBestAlignments + " cpu-ms (" + millisThroughOptimisticBestAlignments + "s)");
+        int queriesLoadedFromCachePercent = (int)((long)100 * (long)statistics.numCacheHits / (long)statistics.numQueriesLoaded);
+        int queriesSavedToCachePercent = (int)((long)100 * alignmentCache.getUsage() / (long)statistics.numQueriesLoaded);
+        long numQueriesNotInCache = statistics.numQueriesLoaded - alignmentCache.getUsage() - statistics.numCacheHits;
+        int queriesNotInCachePercent = (int)((long) 100 * (long)numQueriesNotInCache / (long)statistics.numQueriesLoaded);
+  
+        outputWriter.write(" Alignment cache usage         : " + queriesLoadedFromCachePercent + "% (" + statistics.numCacheHits + ") loaded, " + queriesSavedToCachePercent + "% (" + alignmentCache.getUsage() + ") stored, " + queriesNotInCachePercent + "% (" + numQueriesNotInCache + ") skipped");
+      }
       outputWriter.write(" Time reading queries          : " + statistics.millisReadingQueries + "ms");
       outputWriter.write(" Time launching workers        : " + statistics.millisLaunchingWorkers + "ms");
       outputWriter.write(" Time waiting for workers      : " + statistics.millisWaitingForWorkers + "ms");
